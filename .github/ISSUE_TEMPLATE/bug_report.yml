@@ -1,0 +1,33 @@
+name: Bug report
+description: Something in AI Connect is not working
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Easiest way: run **Report a bug** from the Start menu (or `report-bug.bat`). It copies your diagnostics to the clipboard; paste them below.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: navis
+    attributes:
+      label: Navisworks product and version
+      placeholder: Manage 2024
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AI Connect version
+      placeholder: 1.0.0
+  - type: textarea
+    id: diag
+    attributes:
+      label: Diagnostics
+      description: Paste the output of "Report a bug" here (review it first; it contains no model data).
+      render: text

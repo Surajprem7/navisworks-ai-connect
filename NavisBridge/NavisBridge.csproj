@@ -3,11 +3,17 @@
   <PropertyGroup>
     <!-- Where Navisworks is installed. Override with: dotnet build -p:NavisDir="D:\path" -->
     <NavisDir Condition="'$(NavisDir)'==''">C:\Program Files\Autodesk\Navisworks Manage 2027</NavisDir>
+    <!-- Version of the plug-in itself (also used by the installer). -->
+    <Version>1.0.0</Version>
+    <!-- NavisVersion = 2022..2026 builds against the public NuGet API packages (net48), no Navisworks install needed.
+         Leave it empty to build against the locally installed Navisworks in NavisDir (used for 2027+). -->
+    <NavisVersion Condition="'$(NavisVersion)'==''"></NavisVersion>
     <NavisRuntimeConfig>$(NavisDir)\Roamer.runtimeconfig.json</NavisRuntimeConfig>
     <!-- Auto-detect the runtime Navisworks uses (net48 if it has no runtimeconfig). Override with -p:NavisTfm=net8.0-windows -->
     <DetectedTfm Condition="Exists('$(NavisRuntimeConfig)')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(NavisRuntimeConfig)')), '"tfm"\s*:\s*"(net[0-9.]+)"').Groups[1].Value)</DetectedTfm>
     <NavisTfm Condition="'$(NavisTfm)'=='' and '$(DetectedTfm)'!=''">$(DetectedTfm)-windows</NavisTfm>
     <NavisTfm Condition="'$(NavisTfm)'==''">net48</NavisTfm>
+    <NavisTfm Condition="'$(NavisVersion)'!=''">net48</NavisTfm>
     <TargetFramework>$(NavisTfm)</TargetFramework>
 
     <AssemblyName>NavisBridge</AssemblyName>
@@ -29,7 +35,12 @@
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(NavisVersion)'!=''">
+    <PackageReference Include="Chuongmep.Navis.Api.Autodesk.Navisworks.Api" Version="$(NavisVersion).*" ExcludeAssets="runtime" />
+    <PackageReference Include="Chuongmep.Navis.Api.Autodesk.Navisworks.Clash" Version="$(NavisVersion).*" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(NavisVersion)'==''">
     <Reference Include="Autodesk.Navisworks.Api">
       <HintPath>$(NavisDir)\Autodesk.Navisworks.Api.dll</HintPath>
       <Private>false</Private>
@@ -38,6 +49,9 @@
       <HintPath>$(NavisDir)\Autodesk.Navisworks.Clash.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 

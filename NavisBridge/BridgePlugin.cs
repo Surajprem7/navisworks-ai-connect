@@ -24,6 +24,7 @@ namespace NavisBridge
     public class BridgePlugin : CommandHandlerPlugin
     {
         public const int Port = 47800;
+        internal static string Ver { get { var v = typeof(BridgePlugin).Assembly.GetName().Version; return v.Major + "." + v.Minor + "." + v.Build; } }
         internal static void Log(string m)
         {
             try { File.AppendAllText(Path.Combine(Path.GetTempPath(), "navisbridge.log"), DateTime.Now.ToString("HH:mm:ss.fff") + " [t" + Thread.CurrentThread.ManagedThreadId + "] " + m + "\r\n"); } catch { }
@@ -84,7 +85,7 @@ namespace NavisBridge
             _listener.Prefixes.Add("http://127.0.0.1:" + Port + "/");
             _listener.Start(); Log("listener started");
             Task.Run(() => Loop(_listener));
-            System.Windows.Forms.MessageBox.Show("AI Connect is on (127.0.0.1:" + Port + ").\nClick AI Connect again to disconnect.", "AI Connect", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
+            System.Windows.Forms.MessageBox.Show("AI Connect v" + Ver + " is on (127.0.0.1:" + Port + ").\nClick AI Connect again to disconnect.", "AI Connect", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             return 0;
         }
 

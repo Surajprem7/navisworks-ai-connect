@@ -4,6 +4,8 @@
 
 const BRIDGE = process.env.NAVIS_BRIDGE_URL || 'http://127.0.0.1:47800/';
 const TOKEN = process.env.NAVIS_BRIDGE_TOKEN || '';
+const VERSION = '1.0.0';
+const REPO = 'Surajprem7/navisworks-ai-connect';
 
 const str = (description) => ({ type: 'string', description });
 const num = (description) => ({ type: 'number', description });
@@ -15,6 +17,7 @@ const searchProps = {
 };
 
 const TOOLS = [
+  { name: 'check_for_updates', description: 'Check GitHub for a newer AI Connect release than the one installed. Sends no personal data; only asks GitHub for the latest version number.', inputSchema: { type: 'object', properties: {} } },
   { name: 'get_model_info', description: 'Active Navisworks document: file, appended models, selection count, number of selection sets and clash tests.', inputSchema: { type: 'object', properties: {} } },
   { name: 'search_items', description: 'Find model items by a property condition. Returns total count and up to `limit` items.', inputSchema: { type: 'object', properties: { ...searchProps, limit: num('Max items returned (default 50)') }, required: ['category', 'property', 'value'] } },
   { name: 'select_items', description: 'Select (and optionally zoom to) the items matching a property condition in the Navisworks view.', inputSchema: { type: 'object', properties: { ...searchProps, zoom: { type: 'boolean', description: 'Zoom to selection (default true)' } }, required: ['category', 'property', 'value'] } },
@@ -28,7 +31,21 @@ const TOOLS = [
   { name: 'get_clash_results', description: 'Get results of a clash test (optionally filtered by status such as New, Active, Reviewed, Approved, Resolved).', inputSchema: { type: 'object', properties: { name: str('Test name'), status: str('Status filter'), limit: num('Max results (default 100)') }, required: ['name'] } },
 ];
 
+async function checkForUpdates() {
+  const res = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { 'User-Agent': 'ai-connect', Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15000) });
+  if (res.status === 404) return { installed: VERSION, latest: null, message: 'No release published yet.' };
+  if (!res.ok) throw new Error('GitHub returned HTTP ' + res.status);
+  const rel = await res.json();
+  const latest = String(rel.tag_name || '').replace(/^v/i, '');
+  const n = (v) => v.split('.').map((x) => parseInt(x, 10) || 0);
+  const a = n(latest), b = n(VERSION);
+  let newer = false;
+  for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) { newer = (a[i] || 0) > (b[i] || 0); break; } }
+  return { installed: VERSION, latest, update_available: newer, download: rel.html_url, message: newer ? 'A newer version is available. Download AI-Connect-Setup.exe from the release page and run it; it upgrades in place.' : 'You are up to date.' };
+}
+
 async function callBridge(tool, args) {
+  if (tool === 'check_for_updates') return checkForUpdates();
   const headers = { 'Content-Type': 'application/json' };
   if (TOKEN) headers['X-Bridge-Token'] = TOKEN;
   let res;
@@ -49,7 +66,7 @@ async function handle(msg) {
   if (id === undefined) return; // notification (e.g. notifications/initialized)
   try {
     if (method === 'initialize') {
-      return send({ jsonrpc: '2.0', id, result: { protocolVersion: (params && params.protocolVersion) || '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'navisworks', version: '1.0.0' } } });
+      return send({ jsonrpc: '2.0', id, result: { protocolVersion: (params && params.protocolVersion) || '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'navisworks', version: VERSION } } });
     }
     if (method === 'ping') return send({ jsonrpc: '2.0', id, result: {} });
     if (method === 'tools/list') return send({ jsonrpc: '2.0', id, result: { tools: TOOLS } });
