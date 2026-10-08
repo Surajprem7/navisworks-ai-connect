@@ -30,7 +30,9 @@ Tested on Navisworks Manage 2027 with Claude Desktop on Windows 11. Other Navisw
 
 Needs [Node.js](https://nodejs.org) (`winget install OpenJS.NodeJS.LTS`) so Claude can run the connector.
 
-**Updates:** AI Connect checks GitHub once a day when Navisworks starts and asks before updating. If you agree, it downloads the installer, verifies its SHA-256 checksum and installs when you close Navisworks (Windows asks for permission). You can tick "Update automatically in the future"; after a release is over a week old the reminder appears on every start. Turn the check off with the environment variable `AI_CONNECT_NO_UPDATE_CHECK=1`. You can also run the newer AI-Connect-Setup.exe by hand, or ask Claude "check for AI Connect updates".\n\nMaintainers: publish each release with both `AI-Connect-Setup.exe` and `AI-Connect-Setup.exe.sha256` (build-installer.bat creates both).
+**Updates:** AI Connect checks GitHub once a day when Navisworks starts and asks before updating. If you agree, it downloads the installer, verifies its SHA-256 checksum and installs when you close Navisworks (Windows asks for permission). You can tick "Update automatically in the future"; after a release is over a week old the reminder appears on every start. Turn the check off with the environment variable `AI_CONNECT_NO_UPDATE_CHECK=1`. You can also run the newer AI-Connect-Setup.exe by hand, or ask Claude "check for AI Connect updates".
+
+Maintainers: publish each release with both `AI-Connect-Setup.exe` and `AI-Connect-Setup.exe.sha256` (build-installer.bat creates both).
 **Report a bug:** Start menu > AI Connect > *Report a bug* (collects diagnostics, opens the GitHub form), or open an [issue](https://github.com/Surajprem7/navisworks-ai-connect/issues/new?template=bug_report.yml).
 **Uninstall:** Windows Settings > Apps > AI Connect for Navisworks.
 
