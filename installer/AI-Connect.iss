@@ -1,5 +1,5 @@
 ; AI Connect installer (Inno Setup 6). Build with installer\build-installer.bat after build-all.bat.
-#define AppVer "1.0.0"
+#define AppVer "1.1.0"
 
 [Setup]
 AppId={{8F3A6C52-4B1E-4D7A-9C21-5E7A1B0D3F44}
@@ -149,7 +149,9 @@ begin
   for I := 0 to GetArrayLength(NavDirs) - 1 do
     Page.Add(NavNames[I]);
   for I := 0 to GetArrayLength(NavDirs) - 1 do
-    Page.Values[I] := True;
+    // upgrading: only update versions that already have the add-in; first install: all detected versions
+    if OldVersion <> '' then Page.Values[I] := DirExists(NavDirs[I] + '\Plugins\NavisBridge')
+    else Page.Values[I] := True;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -190,12 +192,21 @@ begin
     if (NavYears[I] = Year) and Page.Values[I] then begin Result := NavDirs[I] + '\Plugins\NavisBridge'; Exit; end;
 end;
 
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+function NavisRunning(): Boolean;
 var Code: Integer;
 begin
+  Result := Exec(ExpandConstant('{cmd}'), '/c tasklist /fi "imagename eq roamer.exe" | find /i "roamer.exe"', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
   Result := '';
-  if Exec(ExpandConstant('{cmd}'), '/c tasklist /fi "imagename eq roamer.exe" | find /i "roamer.exe"', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0) then
-    Result := 'Navisworks is running. Close it and run the installer again.';
+  while NavisRunning() do
+    if MsgBox('Navisworks is running. Close it, then click Retry.', mbError, MB_RETRYCANCEL) = IDCANCEL then
+    begin
+      Result := 'Installation cancelled because Navisworks is still running.';
+      Exit;
+    end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

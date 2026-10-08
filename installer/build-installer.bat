@@ -12,6 +12,7 @@ if not exist "%~dp0..\dist\2027\NavisBridge.dll" (echo Run build-all.bat first. 
 "%ISCC%" "%~dp0AI-Connect.iss" > "%~dp0iscc.log" 2>&1
 type "%~dp0iscc.log"
 echo.
+if exist "%~dp0Output\AI-Connect-Setup.exe" powershell -NoProfile -Command "$h=(Get-FileHash '%~dp0Output\AI-Connect-Setup.exe' -Algorithm SHA256).Hash.ToLower(); Set-Content -NoNewline -Encoding ascii '%~dp0Output\AI-Connect-Setup.exe.sha256' ($h + '  AI-Connect-Setup.exe')"
 if exist "%~dp0Output\AI-Connect-Setup.exe" (echo Output: %~dp0Output\AI-Connect-Setup.exe) else (echo FAILED - see iscc.log)
 timeout /t 5 >nul
 exit /b 0

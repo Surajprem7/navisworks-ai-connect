@@ -4,7 +4,7 @@
 
 const BRIDGE = process.env.NAVIS_BRIDGE_URL || 'http://127.0.0.1:47800/';
 const TOKEN = process.env.NAVIS_BRIDGE_TOKEN || '';
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const REPO = 'Surajprem7/navisworks-ai-connect';
 
 const str = (description) => ({ type: 'string', description });
