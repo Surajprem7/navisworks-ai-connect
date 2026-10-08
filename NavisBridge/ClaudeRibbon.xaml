@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<RibbonControl xmlns="clr-namespace:Autodesk.Windows;assembly=AdWindows"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:nw="clr-namespace:Autodesk.Navisworks.Gui.Roamer.AIRLook;assembly=navisworks.gui.roamer"
+               x:Uid="RibbonControl_Claude">
+  <RibbonTab Id="ID_ClaudeTab" Title="AI Connect" KeyTip="Z" x:Uid="RibbonTab_Claude">
+    <RibbonPanel x:Uid="RibbonPanel_Claude">
+      <RibbonPanelSource Title="AI Connect" KeyTip="L" x:Uid="RibbonPanelSource_Claude">
+        <nw:NWRibbonButton Id="ID_ClaudeLink_Toggle" Size="Large" KeyTip="C" x:Uid="RibbonButton_Claude" />
+      </RibbonPanelSource>
+    </RibbonPanel>
+  </RibbonTab>
+</RibbonControl>
