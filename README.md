@@ -21,6 +21,25 @@ Tested on Navisworks Manage 2027 with Claude Desktop on Windows 11. Other Navisw
 
 ---
 
+## Install (recommended): one download
+
+1. Download **AI-Connect-Setup.exe** from the [latest release](https://github.com/Surajprem7/navisworks-ai-connect/releases/latest).
+2. Close Navisworks and Claude Desktop, then run it. Windows may show "unknown publisher" (the file is not code-signed): click **More info > Run anyway**.
+3. Tick the Navisworks versions to install into (2022-2027, Manage or Simulate; detected automatically) and finish.
+4. Fully quit Claude (system tray > Quit) and reopen it. Open Navisworks and click **AI Connect > AI Connect** on the ribbon.
+
+Needs [Node.js](https://nodejs.org) (`winget install OpenJS.NodeJS.LTS`) so Claude can run the connector.
+
+**Upgrade:** run the newer AI-Connect-Setup.exe; it upgrades in place. Ask Claude "check for AI Connect updates" at any time.
+**Report a bug:** Start menu > AI Connect > *Report a bug* (collects diagnostics, opens the GitHub form), or open an [issue](https://github.com/Surajprem7/navisworks-ai-connect/issues/new?template=bug_report.yml).
+**Uninstall:** Windows Settings > Apps > AI Connect for Navisworks.
+
+Builds for 2022-2026 are compiled against community API packages and are lightly tested; 2027 is fully tested. Please report problems.
+
+## Install from source (developers)
+
+Run `build-all.bat` (builds every version into `dist\`), then `installer\build-installer.bat` (needs Inno Setup, auto-installed via winget). For a single version use `go.bat`.
+
 ## 1. What you need
 
 | Requirement | How to get it |
