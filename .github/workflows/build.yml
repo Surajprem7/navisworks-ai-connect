@@ -1,0 +1,24 @@
+name: build
+on:
+  push:
+  pull_request:
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --check mcp-server/server.js
+  plugin:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        navis: ['2022', '2024', '2026']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build NavisBridge/NavisBridge.csproj -c Release -p:NavisVersion=${{ matrix.navis }}

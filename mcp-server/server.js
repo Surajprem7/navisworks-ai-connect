@@ -3,8 +3,18 @@
 // running inside Navisworks (http://127.0.0.1:47800). Requires Node 18+.
 
 const BRIDGE = process.env.NAVIS_BRIDGE_URL || 'http://127.0.0.1:47800/';
-const TOKEN = process.env.NAVIS_BRIDGE_TOKEN || '';
-const VERSION = '1.1.0';
+const fs = require('fs');
+const path = require('path');
+const VERSION = '1.1.1';
+
+// Shared secret: NAVIS_BRIDGE_TOKEN if set, otherwise the file the Navisworks plugin creates in the user's profile.
+function readToken() {
+  if (process.env.NAVIS_BRIDGE_TOKEN) return process.env.NAVIS_BRIDGE_TOKEN;
+  try {
+    const base = process.env.APPDATA || path.join(process.env.HOME || '', '.config');
+    return fs.readFileSync(path.join(base, 'AI Connect', 'bridge.token'), 'utf8').trim();
+  } catch (e) { return ''; }
+}
 const REPO = 'Surajprem7/navisworks-ai-connect';
 
 const str = (description) => ({ type: 'string', description });
@@ -17,18 +27,18 @@ const searchProps = {
 };
 
 const TOOLS = [
-  { name: 'check_for_updates', description: 'Check GitHub for a newer AI Connect release than the one installed. Sends no personal data; only asks GitHub for the latest version number.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'get_model_info', description: 'Active Navisworks document: file, appended models, selection count, number of selection sets and clash tests.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'search_items', description: 'Find model items by a property condition. Returns total count and up to `limit` items.', inputSchema: { type: 'object', properties: { ...searchProps, limit: num('Max items returned (default 50)') }, required: ['category', 'property', 'value'] } },
-  { name: 'select_items', description: 'Select (and optionally zoom to) the items matching a property condition in the Navisworks view.', inputSchema: { type: 'object', properties: { ...searchProps, zoom: { type: 'boolean', description: 'Zoom to selection (default true)' } }, required: ['category', 'property', 'value'] } },
-  { name: 'list_selection_sets', description: 'List saved Selection/Search Sets.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'create_selection_set', description: 'Create a saved Search Set from a property condition.', inputSchema: { type: 'object', properties: { name: str('Name of the new set'), ...searchProps }, required: ['name', 'category', 'property', 'value'] } },
-  { name: 'list_viewpoints', description: 'List saved viewpoints.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'save_viewpoint', description: 'Save the current view as a named viewpoint.', inputSchema: { type: 'object', properties: { name: str('Viewpoint name') }, required: ['name'] } },
-  { name: 'list_clash_tests', description: 'List Clash Detective tests with type, tolerance, status and result count.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'create_clash_test', description: 'Create a clash test between two saved selection sets.', inputSchema: { type: 'object', properties: { name: str('Test name'), selection_set_a: str('Name of selection set A'), selection_set_b: str('Name of selection set B'), tolerance: num('Tolerance in model units (default 0)'), type: { type: 'string', enum: ['Hard', 'HardConservative', 'Clearance', 'Duplicate'], description: 'Clash type (default Hard)' } }, required: ['name', 'selection_set_a', 'selection_set_b'] } },
-  { name: 'run_clash_test', description: 'Run one clash test by name, or all tests if name is omitted or "*".', inputSchema: { type: 'object', properties: { name: str('Test name, or "*" for all') } } },
-  { name: 'get_clash_results', description: 'Get results of a clash test (optionally filtered by status such as New, Active, Reviewed, Approved, Resolved).', inputSchema: { type: 'object', properties: { name: str('Test name'), status: str('Status filter'), limit: num('Max results (default 100)') }, required: ['name'] } },
+  { name: 'check_for_updates', annotations: { readOnlyHint: true }, description: 'Check GitHub for a newer AI Connect release than the one installed. Sends no personal data; only asks GitHub for the latest version number.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_model_info', annotations: { readOnlyHint: true }, description: 'Active Navisworks document: file, appended models, selection count, number of selection sets and clash tests.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'search_items', annotations: { readOnlyHint: true }, description: 'Find model items by a property condition. Returns total count and up to `limit` items.', inputSchema: { type: 'object', properties: { ...searchProps, limit: num('Max items returned (default 50)') }, required: ['category', 'property', 'value'] } },
+  { name: 'select_items', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Select (and optionally zoom to) the items matching a property condition in the Navisworks view.', inputSchema: { type: 'object', properties: { ...searchProps, zoom: { type: 'boolean', description: 'Zoom to selection (default true)' } }, required: ['category', 'property', 'value'] } },
+  { name: 'list_selection_sets', annotations: { readOnlyHint: true }, description: 'List saved Selection/Search Sets.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'create_selection_set', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Create a saved Search Set from a property condition.', inputSchema: { type: 'object', properties: { name: str('Name of the new set'), ...searchProps }, required: ['name', 'category', 'property', 'value'] } },
+  { name: 'list_viewpoints', annotations: { readOnlyHint: true }, description: 'List saved viewpoints.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'save_viewpoint', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Save the current view as a named viewpoint.', inputSchema: { type: 'object', properties: { name: str('Viewpoint name') }, required: ['name'] } },
+  { name: 'list_clash_tests', annotations: { readOnlyHint: true }, description: 'List Clash Detective tests with type, tolerance, status and result count.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'create_clash_test', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Create a clash test between two saved selection sets.', inputSchema: { type: 'object', properties: { name: str('Test name'), selection_set_a: str('Name of selection set A'), selection_set_b: str('Name of selection set B'), tolerance: num('Tolerance in model units (default 0)'), type: { type: 'string', enum: ['Hard', 'HardConservative', 'Clearance', 'Duplicate'], description: 'Clash type (default Hard)' } }, required: ['name', 'selection_set_a', 'selection_set_b'] } },
+  { name: 'run_clash_test', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Run one clash test by name, or all tests if name is omitted or "*".', inputSchema: { type: 'object', properties: { name: str('Test name, or "*" for all') } } },
+  { name: 'get_clash_results', annotations: { readOnlyHint: true }, description: 'Get results of a clash test (optionally filtered by status such as New, Active, Reviewed, Approved, Resolved).', inputSchema: { type: 'object', properties: { name: str('Test name'), status: str('Status filter'), limit: num('Max results (default 100)') }, required: ['name'] } },
 ];
 
 async function checkForUpdates() {
@@ -47,7 +57,8 @@ async function checkForUpdates() {
 async function callBridge(tool, args) {
   if (tool === 'check_for_updates') return checkForUpdates();
   const headers = { 'Content-Type': 'application/json' };
-  if (TOKEN) headers['X-Bridge-Token'] = TOKEN;
+  const token = readToken();
+  if (token) headers['X-Bridge-Token'] = token;
   let res;
   try {
     res = await fetch(BRIDGE, { method: 'POST', headers, body: JSON.stringify({ tool, args }), signal: AbortSignal.timeout(55000) });

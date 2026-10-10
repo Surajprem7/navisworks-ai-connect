@@ -68,6 +68,29 @@ namespace NavisBridge
                 return 0;
             }
 
+            // Shared secret: generated on first use and stored in the user's profile; the MCP server reads the same file.
+            _token = LoadOrCreateToken();
+            if (string.IsNullOrEmpty(_token))
+            {
+                System.Windows.Forms.MessageBox.Show("AI Connect could not create its security token in %APPDATA%\\AI Connect, so it was not started.", "AI Connect", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
+                return 0;
+            }
+
+            try
+            {
+                _listener = new HttpListener();
+                _listener.Prefixes.Add("http://127.0.0.1:" + Port + "/");
+                _listener.Start(); Log("listener started");
+            }
+            catch (Exception ex)
+            {
+                Log("listener start failed: " + ex);
+                try { if (_listener != null) _listener.Close(); } catch { }
+                _listener = null;
+                System.Windows.Forms.MessageBox.Show("AI Connect could not start on 127.0.0.1:" + Port + ".\nAnother program (or another Navisworks window) may already be using that port.\n\n" + ex.Message, "AI Connect", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning);
+                return 0;
+            }
+
             // Execute() runs on the Navisworks UI thread, so a timer created here ticks on that thread.
             _timer = new System.Windows.Forms.Timer { Interval = 50 };
             _timer.Tick += (s, e) =>
@@ -78,15 +101,29 @@ namespace NavisBridge
             };
             _timer.Start();
 
-            // Optional shared secret. If NAVIS_BRIDGE_TOKEN is set, requests must send header X-Bridge-Token.
-            _token = Environment.GetEnvironmentVariable("NAVIS_BRIDGE_TOKEN");
-
-            _listener = new HttpListener();
-            _listener.Prefixes.Add("http://127.0.0.1:" + Port + "/");
-            _listener.Start(); Log("listener started");
             Task.Run(() => Loop(_listener));
             System.Windows.Forms.MessageBox.Show("AI Connect v" + Ver + " is on (127.0.0.1:" + Port + ").\nClick AI Connect again to disconnect.", "AI Connect", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information);
             return 0;
+        }
+
+        internal static string TokenFile { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AI Connect", "bridge.token"); } }
+
+        private static string LoadOrCreateToken()
+        {
+            var env = Environment.GetEnvironmentVariable("NAVIS_BRIDGE_TOKEN");
+            if (!string.IsNullOrEmpty(env)) return env;
+            try
+            {
+                var file = TokenFile;
+                if (File.Exists(file)) { var t = File.ReadAllText(file).Trim(); if (t.Length >= 32) return t; }
+                Directory.CreateDirectory(Path.GetDirectoryName(file));
+                var b = new byte[32];
+                using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create()) rng.GetBytes(b);
+                var tok = BitConverter.ToString(b).Replace("-", "").ToLowerInvariant();
+                File.WriteAllText(file, tok);
+                return tok;
+            }
+            catch (Exception ex) { Log("token error: " + ex.Message); return null; }
         }
 
         private static async Task Loop(HttpListener l)
@@ -122,7 +159,17 @@ namespace NavisBridge
             Log("Handle start");
             try
             {
-                if (!string.IsNullOrEmpty(_token) && ctx.Request.Headers["X-Bridge-Token"] != _token)
+                // A browser always sends Origin on cross-site requests; our own MCP server never does.
+                if (ctx.Request.Headers["Origin"] != null)
+                    throw new UnauthorizedAccessException("browser requests are not allowed");
+                // Blocks DNS-rebinding: only accept requests addressed to the loopback bridge itself.
+                var host = ctx.Request.Headers["Host"] ?? "";
+                if (host != "127.0.0.1:" + Port && host != "localhost:" + Port)
+                    throw new UnauthorizedAccessException("bad host");
+                var ctype = ctx.Request.ContentType ?? "";
+                if (!ctype.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
+                    throw new UnauthorizedAccessException("content type must be application/json");
+                if (string.IsNullOrEmpty(_token) || ctx.Request.Headers["X-Bridge-Token"] != _token)
                     throw new UnauthorizedAccessException("bad token");
 
                 string body;
@@ -134,13 +181,15 @@ namespace NavisBridge
                 JToken output = null;
                 Exception err = null;
                 var done = new ManualResetEventSlim(false);
+                var abandoned = false; // set when the caller timed out, so work that never started is not run later (avoids duplicate actions on retry)
                 _queue.Enqueue(() =>
                 {
+                    if (abandoned) { Log("skipped (timed out before start): " + tool); done.Set(); return; }
                     try { Log("run " + tool); output = Tools.Run(tool, args); Log("run done"); }
                     catch (Exception ex) { err = ex; Log("run err " + ex); }
                     finally { done.Set(); }
                 });
-                if (!done.Wait(TimeSpan.FromSeconds(45))) throw new TimeoutException("Navisworks did not respond within 45s (busy, or a dialog is open?)");
+                if (!done.Wait(TimeSpan.FromSeconds(45))) { abandoned = true; throw new TimeoutException("Navisworks did not respond within 45s (busy, or a dialog is open?). The request was cancelled if it had not started yet."); }
 
                 result = err == null
                     ? new JObject { ["ok"] = true, ["result"] = output }.ToString()

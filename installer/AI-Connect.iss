@@ -1,5 +1,5 @@
 ; AI Connect installer (Inno Setup 6). Build with installer\build-installer.bat after build-all.bat.
-#define AppVer "1.1.0"
+#define AppVer "1.1.1"
 
 [Setup]
 AppId={{8F3A6C52-4B1E-4D7A-9C21-5E7A1B0D3F44}

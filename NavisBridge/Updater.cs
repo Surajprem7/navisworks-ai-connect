@@ -224,7 +224,7 @@ namespace NavisBridge
                 string got;
                 using (var fs = File.OpenRead(exe)) got = BitConverter.ToString(SHA256.Create().ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
                 if (want.Length != 64 || want != got) { try { File.Delete(exe); } catch { } throw new Exception("Checksum mismatch - update cancelled."); }
-                RunAfterNavisworksCloses(exe);
+                RunAfterNavisworksCloses(exe, want);
                 var st = Load(); st["downloadedTag"] = f.Tag; st["downloadedUtc"] = DateTime.UtcNow; Save(st);
                 BridgePlugin.Log("update " + f.Tag + " downloaded and verified");
             }
@@ -234,9 +234,13 @@ namespace NavisBridge
                     "AI Connect", MessageBoxButtons.OK, err == null ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
 
-        static void RunAfterNavisworksCloses(string exe)
+        static void RunAfterNavisworksCloses(string exe, string sha256)
         {
-            var ps = "while (Get-Process roamer -ErrorAction SilentlyContinue) { Start-Sleep 3 }; Start-Process -FilePath '" + exe.Replace("'", "''") + "' -ArgumentList '/SILENT','/NORESTART' -Verb RunAs";
+            // The installer may sit in %TEMP% for hours, so it is hashed again right before it is started with admin rights.
+            var q = exe.Replace("'", "''");
+            var ps = "while (Get-Process roamer -ErrorAction SilentlyContinue) { Start-Sleep 3 }; " +
+                     "if ((Get-FileHash -LiteralPath '" + q + "' -Algorithm SHA256).Hash.ToLower() -eq '" + sha256 + "') { " +
+                     "Start-Process -FilePath '" + q + "' -ArgumentList '/SILENT','/NORESTART' -Verb RunAs } else { Remove-Item -LiteralPath '" + q + "' -Force -ErrorAction SilentlyContinue }";
             var psi = new ProcessStartInfo("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"" + ps.Replace("\"", "\\\"") + "\"")
             { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden };
             Process.Start(psi);

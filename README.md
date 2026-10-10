@@ -1,7 +1,7 @@
 # Navisworks AI Connect
 
 Let an AI assistant (Claude, or any [MCP](https://modelcontextprotocol.io) client) work inside **Autodesk Navisworks
-Manage 2027**: search and select model items, manage selection sets and viewpoints, and create, run and read clash tests.
+Manage 2022 to 2027**: search and select model items, manage selection sets and viewpoints, and create, run and read clash tests.
 You talk to the assistant; it drives Navisworks.
 
 ```
@@ -107,7 +107,7 @@ Optional environment variables for the server and plugin:
 
 | Variable | Meaning |
 |---|---|
-| `NAVIS_BRIDGE_TOKEN` | Shared secret. Set it for **both** Navisworks and the MCP client; requests without the matching `X-Bridge-Token` header are refused. |
+| `NAVIS_BRIDGE_TOKEN` | Optional override of the shared secret. By default (v1.1.1+) a random token is created in `%APPDATA%\AI Connect\bridge.token` and used automatically by both sides. If you set this variable, set it for **both** Navisworks and the MCP client. |
 | `NAVIS_BRIDGE_URL` | Server side only. Default `http://127.0.0.1:47800/`. |
 
 ## 5. Tools
@@ -136,8 +136,11 @@ or build by hand: `dotnet build -c Release -p:NavisDir="..." -p:NavisTfm=net8.0-
 
 ## Security notes
 
-* The bridge accepts connections from this computer only, but any local program could call it. Set `NAVIS_BRIDGE_TOKEN`
-  if you share the machine.
+* The bridge listens on this computer only (127.0.0.1) and requires a random token that is stored in your user profile
+  (`%APPDATA%\AI Connect\bridge.token`). Requests from web pages (any `Origin` header), wrong `Host` headers and non-JSON
+  requests are refused, so a website you visit cannot drive your model. A program running as you can still read the token file.
+* Results that Claude reads from your model (item names, properties) become part of your chat with Claude. Check your
+  company's AI policy before using project models.
 * The assistant can change your model files (selection sets, viewpoints, clash tests). Save your `.nwf` before big sessions.
 * Navisworks API calls run on the Navisworks UI thread, so large operations briefly freeze Navisworks.
 
