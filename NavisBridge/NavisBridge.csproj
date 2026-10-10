@@ -4,7 +4,7 @@
     <!-- Where Navisworks is installed. Override with: dotnet build -p:NavisDir="D:\path" -->
     <NavisDir Condition="'$(NavisDir)'==''">C:\Program Files\Autodesk\Navisworks Manage 2027</NavisDir>
     <!-- Version of the plug-in itself (also used by the installer). -->
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <!-- NavisVersion = 2022..2026 builds against the public NuGet API packages (net48), no Navisworks install needed.
          Leave it empty to build against the locally installed Navisworks in NavisDir (used for 2027+). -->
     <NavisVersion Condition="'$(NavisVersion)'==''"></NavisVersion>
