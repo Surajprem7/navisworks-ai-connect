@@ -141,7 +141,9 @@ namespace NavisBridge
 
         static bool SafeUrl(string u)
         {
-            return u != null && u.StartsWith("https://github.com/" + Repo + "/releases/download/", StringComparison.Ordinal);
+            // Also accepts the repository's planned new name, so a rename does not break updates.
+            return u != null && (u.StartsWith("https://github.com/" + Repo + "/releases/download/", StringComparison.Ordinal)
+                || u.StartsWith("https://github.com/Surajprem7/navisworks-mcp/releases/download/", StringComparison.Ordinal));
         }
 
         // A verified installer was already downloaded for this version in the last 2 days (waiting for Navisworks to close).

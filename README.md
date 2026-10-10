@@ -1,6 +1,6 @@
-# Navisworks AI Connect
+# Navisworks MCP Server: AI Connect
 
-Let an AI assistant (Claude, or any [MCP](https://modelcontextprotocol.io) client) work inside **Autodesk Navisworks
+A **Navisworks MCP server** and plugin. It lets an AI assistant (Claude, or any [MCP](https://modelcontextprotocol.io) client) work inside **Autodesk Navisworks
 Manage 2022 to 2027**: search and select model items, manage selection sets and viewpoints, and create, run and read clash tests.
 You talk to the assistant; it drives Navisworks.
 
