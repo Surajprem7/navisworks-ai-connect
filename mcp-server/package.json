@@ -1,0 +1,15 @@
+{
+  "name": "navisworks-mcp",
+  "version": "1.1.1",
+  "description": "MCP server for Autodesk Navisworks 2022-2027: search items, selection sets, viewpoints and clash tests from Claude or any MCP client. Needs the AI Connect plugin running inside Navisworks.",
+  "mcpName": "io.github.Surajprem7/navisworks-mcp",
+  "bin": { "navisworks-mcp": "server.js" },
+  "main": "server.js",
+  "files": ["server.js"],
+  "engines": { "node": ">=18" },
+  "license": "MIT",
+  "keywords": ["mcp", "mcp-server", "model-context-protocol", "navisworks", "bim", "autodesk", "clash-detection", "claude"],
+  "repository": { "type": "git", "url": "git+https://github.com/Surajprem7/navisworks-ai-connect.git", "directory": "mcp-server" },
+  "homepage": "https://github.com/Surajprem7/navisworks-ai-connect#readme",
+  "bugs": { "url": "https://github.com/Surajprem7/navisworks-ai-connect/issues" }
+}
