@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.4
+- Maintenance release. Added a one-click `release.bat` for building and publishing releases. No change for users.
+
 ## 1.1.3
 - Update check now runs every time Navisworks starts (it was once a day).
 
