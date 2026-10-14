@@ -1,6 +1,6 @@
 {
   "name": "navisworks-mcp",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "description": "MCP server for Autodesk Navisworks 2022-2027: search items, selection sets, viewpoints and clash tests from Claude or any MCP client. Needs the AI Connect plugin running inside Navisworks.",
   "mcpName": "io.github.Surajprem7/navisworks-mcp",
   "bin": { "navisworks-mcp": "server.js" },

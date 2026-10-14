@@ -25,6 +25,12 @@ namespace NavisBridge
                 case "create_clash_test": return CreateClashTest(a);
                 case "run_clash_test": return RunClashTest(a);
                 case "get_clash_results": return GetClashResults(a);
+                case "inspect_clash_result": return InspectClashResult(a);
+                case "focus_clash_result": return FocusClashResult(a);
+                case "set_clash_item_visibility": return SetClashItemVisibility(a);
+                case "set_visibility": return SetVisibility(a);
+                case "reset_visibility": return ResetVisibility();
+                case "set_clash_result_status": return SetClashResultStatus(a);
                 default: throw new ArgumentException("Unknown tool: " + tool);
             }
         }
@@ -66,17 +72,24 @@ namespace NavisBridge
 
         private static ModelItemCollection FindItems(JObject a, out Search search)
         {
-            string cat = (string)a["category"], prop = (string)a["property"], val = (string)a["value"];
-            string mode = ((string)a["match"] ?? "equals").ToLowerInvariant();
-            if (cat == null || prop == null || val == null)
-                throw new ArgumentException("category, property and value are required");
+            // Either one condition (category/property/value/match) or several in "conditions" (all must match).
+            var conds = new List<JObject>();
+            if (a["conditions"] is JArray ca && ca.Count > 0) foreach (var c in ca) conds.Add((JObject)c);
+            else conds.Add(a);
 
             search = new Search();
             search.Selection.SelectAll();
-            var hasProp = SearchCondition.HasPropertyByDisplayName(cat, prop);
-            search.SearchConditions.Add(mode == "contains"
-                ? hasProp.DisplayStringContains(val)
-                : hasProp.EqualValue(VariantData.FromDisplayString(val)));
+            foreach (var c in conds)
+            {
+                string cat = (string)c["category"], prop = (string)c["property"], val = (string)c["value"];
+                string mode = ((string)c["match"] ?? "equals").ToLowerInvariant();
+                if (cat == null || prop == null || val == null)
+                    throw new ArgumentException("category, property and value are required");
+                var hasProp = SearchCondition.HasPropertyByDisplayName(cat, prop);
+                search.SearchConditions.Add(mode == "contains"
+                    ? hasProp.DisplayStringContains(val)
+                    : hasProp.EqualValue(VariantData.FromDisplayString(val)));
+            }
             return search.FindAll(Doc, false);
         }
 
@@ -259,6 +272,8 @@ namespace NavisBridge
                         ["distance"] = r.Distance,
                         ["item1"] = r.Item1 != null ? r.Item1.DisplayName : null,
                         ["item2"] = r.Item2 != null ? r.Item2.DisplayName : null,
+                        ["item1Guid"] = r.Item1 != null ? r.Item1.InstanceGuid.ToString() : null,
+                        ["item2Guid"] = r.Item2 != null ? r.Item2.InstanceGuid.ToString() : null,
                         ["center"] = r.Center == null ? null : new JArray(r.Center.X, r.Center.Y, r.Center.Z)
                     });
                 }
@@ -272,6 +287,121 @@ namespace NavisBridge
             var arr = new JArray();
             CollectResults(t, "", arr, (int?)a["limit"] ?? 100, (string)a["status"]);
             return new JObject { ["test"] = t.DisplayName, ["totalResults"] = CountResults(t), ["returned"] = arr.Count, ["results"] = arr };
+        }
+
+        // ---------- overlap review (clash results) ----------
+
+        private static ClashResult FindResult(SavedItem parent, string name)
+        {
+            var children = (parent as GroupItem)?.Children;
+            if (children == null) return null;
+            foreach (SavedItem c in children)
+            {
+                if (c is ClashResult r) { if (string.Equals(r.DisplayName, name, StringComparison.OrdinalIgnoreCase)) return r; }
+                else { var f = FindResult(c, name); if (f != null) return f; }
+            }
+            return null;
+        }
+
+        private static ClashResult GetResult(JObject a, out ClashTest test)
+        {
+            test = FindTest((string)a["test"] ?? throw new ArgumentException("test is required"));
+            string rn = (string)a["result"] ?? throw new ArgumentException("result is required (use the name from get_clash_results, e.g. Clash1)");
+            return FindResult(test, rn) ?? throw new ArgumentException("Clash result not found: " + rn);
+        }
+
+        private static JObject Describe(ModelItem it, int maxProps)
+        {
+            var path = new List<string>();
+            foreach (var x in it.AncestorsAndSelf) path.Add(x.DisplayName);
+            path.Reverse();
+            var props = new JObject();
+            int n = 0;
+            foreach (PropertyCategory pc in it.PropertyCategories)
+            {
+                var cat = new JObject();
+                foreach (DataProperty p in pc.Properties)
+                {
+                    if (n++ >= maxProps) break;
+                    string v;
+                    try { v = p.Value.ToDisplayString(); } catch { v = null; }
+                    cat[p.DisplayName] = v;
+                }
+                if (cat.Count > 0) props[pc.DisplayName] = cat;
+            }
+            return new JObject
+            {
+                ["name"] = it.DisplayName,
+                ["class"] = it.ClassDisplayName,
+                ["guid"] = it.InstanceGuid.ToString(),
+                ["path"] = string.Join(" > ", path),
+                ["sourceFile"] = it.Model != null ? it.Model.FileName : null,
+                ["hidden"] = it.IsHidden,
+                ["properties"] = props
+            };
+        }
+
+        private static JToken InspectClashResult(JObject a)
+        {
+            var r = GetResult(a, out var t);
+            int max = (int?)a["max_properties"] ?? 120;
+            return new JObject
+            {
+                ["test"] = t.DisplayName,
+                ["result"] = r.DisplayName,
+                ["status"] = r.Status.ToString(),
+                ["distance"] = r.Distance,
+                ["item1"] = r.Item1 != null ? Describe(r.Item1, max) : null,
+                ["item2"] = r.Item2 != null ? Describe(r.Item2, max) : null
+            };
+        }
+
+        private static JToken FocusClashResult(JObject a)
+        {
+            var r = GetResult(a, out _);
+            var d = Doc;
+            var items = new ModelItemCollection();
+            if (r.Item1 != null) items.Add(r.Item1);
+            if (r.Item2 != null) items.Add(r.Item2);
+            d.CurrentSelection.Clear();
+            d.CurrentSelection.CopyFrom(items);
+            d.ActiveView.FocusOnCurrentSelection();
+            return new JObject { ["focused"] = r.DisplayName, ["selected"] = items.Count };
+        }
+
+        private static JToken SetClashItemVisibility(JObject a)
+        {
+            var r = GetResult(a, out _);
+            string which = ((string)a["item"] ?? "both").ToLowerInvariant();
+            bool hidden = (bool?)a["hidden"] ?? true;
+            var items = new ModelItemCollection();
+            if ((which == "item1" || which == "both") && r.Item1 != null) items.Add(r.Item1);
+            if ((which == "item2" || which == "both") && r.Item2 != null) items.Add(r.Item2);
+            if (items.Count == 0) throw new ArgumentException("item must be item1, item2 or both");
+            Doc.Models.SetHidden(items, hidden);
+            return new JObject { ["result"] = r.DisplayName, ["item"] = which, ["hidden"] = hidden };
+        }
+
+        private static JToken SetVisibility(JObject a)
+        {
+            var items = FindItems(a, out _);
+            bool hidden = (bool?)a["hidden"] ?? true;
+            Doc.Models.SetHidden(items, hidden);
+            return new JObject { ["items"] = items.Count, ["hidden"] = hidden };
+        }
+
+        private static JToken ResetVisibility()
+        {
+            Doc.Models.ResetAllHidden();
+            return new JObject { ["reset"] = true };
+        }
+
+        private static JToken SetClashResultStatus(JObject a)
+        {
+            var r = GetResult(a, out _);
+            var status = (ClashResultStatus)Enum.Parse(typeof(ClashResultStatus), (string)a["status"] ?? throw new ArgumentException("status is required"), true);
+            ClashTests.TestsEditResultStatus(r, status);
+            return new JObject { ["result"] = r.DisplayName, ["status"] = status.ToString() };
         }
     }
 }

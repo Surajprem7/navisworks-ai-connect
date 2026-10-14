@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+New tools for reviewing overlapping elements (all view-only; the model file is never changed):
+- `inspect_clash_result`: both elements of one clash result with name, class, path, source file and all properties.
+- `focus_clash_result`: select and zoom to both elements.
+- `set_clash_item_visibility`, `set_visibility`, `reset_visibility`: hide or show elements so you can decide which one stays visible.
+- `set_clash_result_status`: mark a result New, Active, Reviewed, Approved or Resolved.
+- Search tools accept several conditions at once (`conditions`, all must match).
+- `get_clash_results` now includes the GUID of each element.
+
 ## 1.1.4
 - Maintenance release. Added a one-click `release.bat` for building and publishing releases. No change for users.
 

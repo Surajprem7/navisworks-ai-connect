@@ -114,6 +114,8 @@ Optional environment variables for the server and plugin:
 
 `get_model_info`, `search_items`, `select_items`, `list_selection_sets`, `create_selection_set`, `list_viewpoints`,
 `save_viewpoint`, `list_clash_tests`, `create_clash_test`, `run_clash_test`, `get_clash_results`.
+
+Overlap review (view only): `inspect_clash_result`, `focus_clash_result`, `set_clash_item_visibility`, `set_visibility`, `reset_visibility`, `set_clash_result_status`.
 Arguments and examples: [docs/TOOLS.md](docs/TOOLS.md).
 
 ## 6. Update, rebuild, uninstall
