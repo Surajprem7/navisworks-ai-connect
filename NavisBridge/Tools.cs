@@ -400,7 +400,21 @@ namespace NavisBridge
         {
             var r = GetResult(a, out _);
             var status = (ClashResultStatus)Enum.Parse(typeof(ClashResultStatus), (string)a["status"] ?? throw new ArgumentException("status is required"), true);
-            ClashTests.TestsEditResultStatus(r, status);
+            // The signature differs between Navisworks versions (newer ones add an Assignee argument), so call it by reflection.
+            var tests = ClashTests;
+            System.Reflection.MethodInfo best = null;
+            foreach (var m in tests.GetType().GetMethods())
+            {
+                if (m.Name != "TestsEditResultStatus") continue;
+                if (best == null || m.GetParameters().Length < best.GetParameters().Length) best = m;
+            }
+            if (best == null) throw new InvalidOperationException("This Navisworks version cannot change clash result status.");
+            var ps = best.GetParameters();
+            var args = new object[ps.Length];
+            args[0] = r;
+            if (ps.Length > 1) args[1] = status;
+            try { best.Invoke(tests, args); }
+            catch (System.Reflection.TargetInvocationException ex) { throw ex.InnerException ?? ex; }
             return new JObject { ["result"] = r.DisplayName, ["status"] = status.ToString() };
         }
     }
