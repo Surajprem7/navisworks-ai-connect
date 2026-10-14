@@ -20,10 +20,12 @@ gh auth status >nul 2>nul || (
 )
 gh auth status >nul 2>nul || (echo GitHub login failed. & pause & exit /b 1)
 
-git status --porcelain > "%TEMP%\aic-git.txt"
-for %%F in ("%TEMP%\aic-git.txt") do if %%~zF GTR 0 (echo You have uncommitted changes. Commit and push first. & pause & exit /b 1)
-git fetch -q
-for /f %%C in ('git rev-list --count origin/main..HEAD') do if not "%%C"=="0" (echo You have commits that are not pushed. Run git push first. & pause & exit /b 1)
+if exist ".git" (
+  git status --porcelain > "%TEMP%\aic-git.txt"
+  for %%F in ("%TEMP%\aic-git.txt") do if %%~zF GTR 0 (echo You have uncommitted changes. Commit and push first. & pause & exit /b 1)
+  git fetch -q
+  for /f %%C in ('git rev-list --count origin/main..HEAD') do if not "%%C"=="0" (echo You have commits that are not pushed. Run git push first. & pause & exit /b 1)
+)
 
 del /q "installer\Output\AI-Connect-Setup.exe" 2>nul
 del /q "installer\Output\AI-Connect-Setup.exe.sha256" 2>nul
