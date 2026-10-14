@@ -423,6 +423,20 @@ namespace NavisBridge
 
         // ---------- viewpoint animations ----------
 
+        // Smoothing, Loops and Delay are not public in every Navisworks version, so read them by reflection (null if unavailable).
+        private static string Prop(object o, string name)
+        {
+            try
+            {
+                var f = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                var p = o.GetType().GetProperty(name, f);
+                object v = p != null ? p.GetValue(o, null) : null;
+                if (v == null) { var m = o.GetType().GetMethod("Get" + name, f, null, Type.EmptyTypes, null); if (m != null) v = m.Invoke(o, null); }
+                return v == null ? null : Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch { return null; }
+        }
+
         private static void FindAnims(SavedItemCollection c, string path, List<KeyValuePair<string, SavedViewpointAnimation>> into)
         {
             foreach (SavedItem s in c)
@@ -447,8 +461,8 @@ namespace NavisBridge
                     ["folder"] = kv.Key,
                     ["frames"] = frames,
                     ["cuts"] = cuts,
-                    ["smoothing"] = kv.Value.Smoothing.ToString(),
-                    ["loops"] = kv.Value.Loops.ToString()
+                    ["smoothing"] = Prop(kv.Value, "Smoothing"),
+                    ["loops"] = Prop(kv.Value, "Loops")
                 });
             }
             return arr;
@@ -471,7 +485,7 @@ namespace NavisBridge
             {
                 if (ch is SavedViewpointAnimationCut cut)
                 {
-                    double delay = Convert.ToDouble(cut.Delay);
+                    double delay = 0; double.TryParse(Prop(cut, "Delay"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out delay);
                     totalDelay += delay;
                     items.Add(new JObject { ["type"] = "cut", ["name"] = cut.DisplayName, ["delaySeconds"] = delay });
                 }
@@ -506,8 +520,8 @@ namespace NavisBridge
             {
                 ["name"] = an.DisplayName,
                 ["units"] = Doc.Units.ToString(),
-                ["smoothing"] = an.Smoothing.ToString(),
-                ["loops"] = an.Loops.ToString(),
+                ["smoothing"] = Prop(an, "Smoothing"),
+                ["loops"] = Prop(an, "Loops"),
                 ["frames"] = frameNo,
                 ["totalCameraTravel"] = Math.Round(totalDist, 3),
                 ["totalTurnDegrees"] = Math.Round(totalAngle, 1),
