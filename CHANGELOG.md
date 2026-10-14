@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.2
+- Update check now writes clear lines to the log (`%TEMP%\navisbridge.log`): installed version, latest version, and whether the prompt was shown or snoozed. Helps find why an update prompt does not appear.
+
 ## 1.1.1
 Security hardening (thanks to the reviewer who suggested these).
 - The local bridge now always requires a random token, created on first start in `%APPDATA%\AI Connect\bridge.token` and read automatically by the MCP server. Requests from web pages (any `Origin` header), wrong `Host` headers (DNS rebinding) and non-JSON content types are rejected.

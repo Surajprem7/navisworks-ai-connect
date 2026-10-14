@@ -158,6 +158,7 @@ namespace NavisBridge
             var s = Load();
             s["lastCheckUtc"] = DateTime.UtcNow;
             var f = _found;
+            BridgePlugin.Log("update check: installed=" + BridgePlugin.Ver + " latest=" + (f == null ? "(none) " + _error : f.Tag) + " newer=" + (f != null && Newer(f.Tag, BridgePlugin.Ver)));
             if (f == null || !SafeUrl(f.Url) || !SafeUrl(f.ShaUrl) || !Newer(f.Tag, BridgePlugin.Ver)) { s.Remove("pending"); Save(s); return; }
             s["pending"] = new JObject { ["tag"] = f.Tag, ["url"] = f.Url, ["sha"] = f.ShaUrl, ["page"] = f.Page, ["published"] = f.Published };
             Save(s);
@@ -171,8 +172,10 @@ namespace NavisBridge
             double age = (DateTime.UtcNow - f.Published).TotalDays;
             bool strong = age >= StrongReminderDays;
             var snooze = (DateTime?)s["snoozeUntilUtc"];
-            if (snooze.HasValue && DateTime.UtcNow < snooze.Value && !strong) return;
+            if (snooze.HasValue && DateTime.UtcNow < snooze.Value && !strong) { BridgePlugin.Log("update prompt snoozed until " + snooze.Value.ToString("u")); return; }
+            BridgePlugin.Log("update prompt shown for " + f.Tag);
             bool autoOpt; var choice = Ask(f, strong, (int)age, out autoOpt);
+            BridgePlugin.Log("update prompt answer: " + choice);
             if (autoOpt) s["autoUpdate"] = true;
             if (choice == DialogResult.Yes) { s.Remove("snoozeUntilUtc"); Save(s); Download(f, true); }
             else { if (!strong) s["snoozeUntilUtc"] = DateTime.UtcNow.AddDays(1); Save(s); }
