@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.0
+- New: `list_animations` and `get_animation` read saved viewpoint animations (frames, camera position, how far the camera moves and turns between frames, cuts, smoothing, loops). `go_to_viewpoint` switches the view to a saved viewpoint or animation frame. Navisworks does not expose per-frame times, so pacing is judged from travel and turn.
+
 ## 1.2.0
 New tools for reviewing overlapping elements (all view-only; the model file is never changed):
 - `inspect_clash_result`: both elements of one clash result with name, class, path, source file and all properties.

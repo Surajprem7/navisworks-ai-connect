@@ -30,6 +30,9 @@ namespace NavisBridge
                 case "set_clash_item_visibility": return SetClashItemVisibility(a);
                 case "set_visibility": return SetVisibility(a);
                 case "reset_visibility": return ResetVisibility();
+                case "list_animations": return ListAnimations();
+                case "get_animation": return GetAnimation(a);
+                case "go_to_viewpoint": return GoToViewpoint(a);
                 case "set_clash_result_status": return SetClashResultStatus(a);
                 default: throw new ArgumentException("Unknown tool: " + tool);
             }
@@ -416,6 +419,120 @@ namespace NavisBridge
             try { best.Invoke(tests, args); }
             catch (System.Reflection.TargetInvocationException ex) { throw ex.InnerException ?? ex; }
             return new JObject { ["result"] = r.DisplayName, ["status"] = status.ToString() };
+        }
+
+        // ---------- viewpoint animations ----------
+
+        private static void FindAnims(SavedItemCollection c, string path, List<KeyValuePair<string, SavedViewpointAnimation>> into)
+        {
+            foreach (SavedItem s in c)
+            {
+                if (s is SavedViewpointAnimation an) into.Add(new KeyValuePair<string, SavedViewpointAnimation>(path, an));
+                else if (s is GroupItem g) FindAnims(g.Children, path + s.DisplayName + "/", into);
+            }
+        }
+
+        private static JToken ListAnimations()
+        {
+            var found = new List<KeyValuePair<string, SavedViewpointAnimation>>();
+            FindAnims(Doc.SavedViewpoints.Value, "", found);
+            var arr = new JArray();
+            foreach (var kv in found)
+            {
+                int frames = 0, cuts = 0;
+                foreach (SavedItem ch in kv.Value.Children) { if (ch is SavedViewpoint) frames++; else if (ch is SavedViewpointAnimationCut) cuts++; }
+                arr.Add(new JObject
+                {
+                    ["name"] = kv.Value.DisplayName,
+                    ["folder"] = kv.Key,
+                    ["frames"] = frames,
+                    ["cuts"] = cuts,
+                    ["smoothing"] = kv.Value.Smoothing.ToString(),
+                    ["loops"] = kv.Value.Loops.ToString()
+                });
+            }
+            return arr;
+        }
+
+        private static JToken GetAnimation(JObject a)
+        {
+            string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            var found = new List<KeyValuePair<string, SavedViewpointAnimation>>();
+            FindAnims(Doc.SavedViewpoints.Value, "", found);
+            SavedViewpointAnimation an = null;
+            foreach (var kv in found) if (string.Equals(kv.Value.DisplayName, name, StringComparison.OrdinalIgnoreCase)) { an = kv.Value; break; }
+            if (an == null) throw new ArgumentException("Animation not found: " + name);
+
+            var items = new JArray();
+            Point3D prevPos = null; Rotation3D prevRot = null;
+            double totalDist = 0, totalAngle = 0, totalDelay = 0;
+            int frameNo = 0;
+            foreach (SavedItem ch in an.Children)
+            {
+                if (ch is SavedViewpointAnimationCut cut)
+                {
+                    double delay = Convert.ToDouble(cut.Delay);
+                    totalDelay += delay;
+                    items.Add(new JObject { ["type"] = "cut", ["name"] = cut.DisplayName, ["delaySeconds"] = delay });
+                }
+                else if (ch is SavedViewpoint sv)
+                {
+                    frameNo++;
+                    var vp = sv.Viewpoint;
+                    var pos = vp.Position; var rot = vp.Rotation;
+                    var o = new JObject
+                    {
+                        ["type"] = "frame",
+                        ["frame"] = frameNo,
+                        ["name"] = sv.DisplayName,
+                        ["position"] = new JArray(Math.Round(pos.X, 3), Math.Round(pos.Y, 3), Math.Round(pos.Z, 3))
+                    };
+                    if (prevPos != null)
+                    {
+                        double dx = pos.X - prevPos.X, dy = pos.Y - prevPos.Y, dz = pos.Z - prevPos.Z;
+                        double dist = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+                        double dot = Math.Abs(rot.A * prevRot.A + rot.B * prevRot.B + rot.C * prevRot.C + rot.D * prevRot.D);
+                        if (dot > 1) dot = 1;
+                        double ang = 2 * Math.Acos(dot) * 180.0 / Math.PI;
+                        totalDist += dist; totalAngle += ang;
+                        o["moveFromPrevious"] = Math.Round(dist, 3);
+                        o["turnFromPreviousDegrees"] = Math.Round(ang, 2);
+                    }
+                    prevPos = pos; prevRot = rot;
+                    items.Add(o);
+                }
+            }
+            return new JObject
+            {
+                ["name"] = an.DisplayName,
+                ["units"] = Doc.Units.ToString(),
+                ["smoothing"] = an.Smoothing.ToString(),
+                ["loops"] = an.Loops.ToString(),
+                ["frames"] = frameNo,
+                ["totalCameraTravel"] = Math.Round(totalDist, 3),
+                ["totalTurnDegrees"] = Math.Round(totalAngle, 1),
+                ["totalCutDelaySeconds"] = totalDelay,
+                ["note"] = "Navisworks does not expose per-frame times. Playback length is set by Navisworks; use travel and turn per frame to judge pacing and flow.",
+                ["items"] = items
+            };
+        }
+
+        private static SavedViewpoint FindViewpointByName(SavedItemCollection c, string name)
+        {
+            foreach (SavedItem s in c)
+            {
+                if (s is SavedViewpoint v && string.Equals(v.DisplayName, name, StringComparison.OrdinalIgnoreCase)) return v;
+                if (s is GroupItem g) { var f = FindViewpointByName(g.Children, name); if (f != null) return f; }
+            }
+            return null;
+        }
+
+        private static JToken GoToViewpoint(JObject a)
+        {
+            string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            var v = FindViewpointByName(Doc.SavedViewpoints.Value, name) ?? throw new ArgumentException("Viewpoint not found: " + name);
+            Doc.SavedViewpoints.CurrentSavedViewpoint = v;
+            return new JObject { ["viewpoint"] = v.DisplayName };
         }
     }
 }

@@ -5,7 +5,7 @@
 const BRIDGE = process.env.NAVIS_BRIDGE_URL || 'http://127.0.0.1:47800/';
 const fs = require('fs');
 const path = require('path');
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 
 // Shared secret: NAVIS_BRIDGE_TOKEN if set, otherwise the file the Navisworks plugin creates in the user's profile.
 function readToken() {
@@ -52,6 +52,9 @@ const TOOLS = [
   { name: 'set_visibility', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Hide or show all items matching a property condition (view only).', inputSchema: { type: 'object', properties: { ...searchProps, conditions: conditionsProp, hidden: { type: 'boolean', description: 'true to hide (default), false to show' } }, required: [] } },
   { name: 'reset_visibility', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Unhide everything that was hidden in the view.', inputSchema: { type: 'object', properties: {} } },
   { name: 'set_clash_result_status', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Set the status of one clash result: New, Active, Reviewed, Approved or Resolved.', inputSchema: { type: 'object', properties: { ...clashRef, status: { type: 'string', enum: ['New', 'Active', 'Reviewed', 'Approved', 'Resolved'] } }, required: ['test', 'result', 'status'] } },
+  { name: 'list_animations', annotations: { readOnlyHint: true }, description: 'List saved viewpoint animations (name, number of frames, cuts, smoothing, loops).', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_animation', annotations: { readOnlyHint: true }, description: 'Read one viewpoint animation: every frame with camera position, and how far the camera moves and turns between frames, plus cuts (pauses) and totals. Navisworks does not expose per-frame times, so use travel and turn to judge pacing and flow.', inputSchema: { type: 'object', properties: { name: str('Animation name') }, required: ['name'] } },
+  { name: 'go_to_viewpoint', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Switch the Navisworks view to a saved viewpoint (or animation frame) by name.', inputSchema: { type: 'object', properties: { name: str('Viewpoint name') }, required: ['name'] } },
 ];
 
 async function checkForUpdates() {
