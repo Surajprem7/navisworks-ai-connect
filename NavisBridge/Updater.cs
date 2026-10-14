@@ -88,18 +88,6 @@ namespace NavisBridge
             try
             {
                 var s = Load();
-                var last = (DateTime?)s["lastCheckUtc"];
-                if (last.HasValue && (DateTime.UtcNow - last.Value).TotalHours < 24)
-                {
-                    // Checked recently: only re-show a stored, week-old pending update (no network).
-                    var p = s["pending"] as JObject;
-                    if (p == null) return;
-                    var f = new Found { Tag = (string)p["tag"], Url = (string)p["url"], ShaUrl = (string)p["sha"], Page = (string)p["page"], Published = (DateTime)p["published"] };
-                    if (!Newer(f.Tag, BridgePlugin.Ver)) { s.Remove("pending"); Save(s); return; }
-                    if (AlreadyQueued(s, f.Tag)) return;
-                    if ((DateTime.UtcNow - f.Published).TotalDays >= StrongReminderDays && !((bool?)s["autoUpdate"] ?? false)) Prompt(s, f);
-                    return;
-                }
                 _done = false;
                 Task.Run(() => Check());
                 _poll = new Timer { Interval = 2000 };
