@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.3
+- Update check now runs every time Navisworks starts (it was once a day).
+
 ## 1.1.2
 - Update check now writes clear lines to the log (`%TEMP%\navisbridge.log`): installed version, latest version, and whether the prompt was shown or snoozed. Helps find why an update prompt does not appear.
 
