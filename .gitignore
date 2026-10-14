@@ -5,3 +5,5 @@ build-log.txt
 .vs/
 dist/
 installer/Output/
+build-status.txt
+build-request.txt
