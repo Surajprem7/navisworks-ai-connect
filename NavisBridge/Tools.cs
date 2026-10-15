@@ -30,6 +30,8 @@ namespace NavisBridge
                 case "set_clash_item_visibility": return SetClashItemVisibility(a);
                 case "set_visibility": return SetVisibility(a);
                 case "reset_visibility": return ResetVisibility();
+                case "list_hidden_items": return ListHiddenItems(a);
+                case "create_selection_set_from_items": return CreateSetFromItems(a);
                 case "list_animations": return ListAnimations();
                 case "get_animation": return GetAnimation(a);
                 case "go_to_viewpoint": return GoToViewpoint(a);
@@ -547,6 +549,94 @@ namespace NavisBridge
             var v = FindViewpointByName(Doc.SavedViewpoints.Value, name) ?? throw new ArgumentException("Viewpoint not found: " + name);
             Doc.SavedViewpoints.CurrentSavedViewpoint = v;
             return new JObject { ["viewpoint"] = v.DisplayName };
+        }
+
+        // ---------- hidden items and exact sets ----------
+
+        private static bool Expired(DateTime started, double seconds) { return (DateTime.UtcNow - started).TotalSeconds > seconds; }
+
+        // Walks the model tree. A hidden item is reported and not searched further (its children are hidden with it).
+        private static void CollectHidden(ModelItem item, List<ModelItem> into, int limit, DateTime started, ref bool truncated)
+        {
+            if (truncated) return;
+            if (item.IsHidden) { into.Add(item); if (into.Count >= limit) truncated = true; return; }
+            if (Expired(started, 30)) { truncated = true; return; }
+            foreach (var c in item.Children) { CollectHidden(c, into, limit, started, ref truncated); if (truncated) return; }
+        }
+
+        private static List<ModelItem> FindHidden(int limit, out bool truncated)
+        {
+            var list = new List<ModelItem>();
+            truncated = false;
+            var started = DateTime.UtcNow;
+            foreach (var m in Doc.Models) { CollectHidden(m.RootItem, list, limit, started, ref truncated); if (truncated) break; }
+            return list;
+        }
+
+        private static string PathOf(ModelItem it)
+        {
+            var path = new List<string>();
+            foreach (var x in it.AncestorsAndSelf) path.Add(x.DisplayName);
+            path.Reverse();
+            return string.Join(" > ", path);
+        }
+
+        private static JToken ListHiddenItems(JObject a)
+        {
+            int limit = (int?)a["limit"] ?? 200;
+            var hidden = FindHidden(limit, out bool truncated);
+            var arr = new JArray();
+            foreach (var it in hidden)
+                arr.Add(new JObject
+                {
+                    ["name"] = it.DisplayName,
+                    ["class"] = it.ClassDisplayName,
+                    ["guid"] = it.InstanceGuid.ToString(),
+                    ["path"] = PathOf(it),
+                    ["sourceFile"] = it.Model != null ? it.Model.FileName : null
+                });
+            return new JObject
+            {
+                ["hiddenFound"] = arr.Count,
+                ["truncated"] = truncated,
+                ["note"] = "Top-level hidden items only; children of a hidden item are hidden with it.",
+                ["items"] = arr
+            };
+        }
+
+        private static void CollectByGuid(ModelItem item, HashSet<Guid> wanted, ModelItemCollection into, DateTime started)
+        {
+            if (wanted.Count == 0 || Expired(started, 30)) return;
+            if (wanted.Remove(item.InstanceGuid)) { into.Add(item); if (wanted.Count == 0) return; }
+            foreach (var c in item.Children) { CollectByGuid(c, wanted, into, started); if (wanted.Count == 0) return; }
+        }
+
+        private static JToken CreateSetFromItems(JObject a)
+        {
+            string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            string source = ((string)a["source"] ?? "").ToLowerInvariant();
+            var items = new ModelItemCollection();
+            if (source == "hidden")
+            {
+                bool trunc; foreach (var it in FindHidden((int?)a["limit"] ?? 5000, out trunc)) items.Add(it);
+            }
+            else if (source == "selected")
+            {
+                items.CopyFrom(Doc.CurrentSelection.SelectedItems);
+            }
+            else if (source == "guids")
+            {
+                var wanted = new HashSet<Guid>();
+                if (a["guids"] is JArray ga) foreach (var g in ga) { Guid gg; if (Guid.TryParse((string)g, out gg)) wanted.Add(gg); }
+                if (wanted.Count == 0) throw new ArgumentException("guids is required when source is guids");
+                var started = DateTime.UtcNow;
+                foreach (var m in Doc.Models) CollectByGuid(m.RootItem, wanted, items, started);
+            }
+            else throw new ArgumentException("source must be hidden, selected or guids");
+            if (items.Count == 0) throw new ArgumentException("No items found for source: " + source);
+            var set = new SelectionSet(items) { DisplayName = name };
+            Doc.SelectionSets.AddCopy(set);
+            return new JObject { ["created"] = name, ["source"] = source, ["items"] = items.Count };
         }
     }
 }
