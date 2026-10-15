@@ -151,7 +151,7 @@ namespace NavisBridge
             s["pending"] = new JObject { ["tag"] = f.Tag, ["url"] = f.Url, ["sha"] = f.ShaUrl, ["page"] = f.Page, ["published"] = f.Published };
             Save(s);
             // Auto-update mode: download quietly (once per version). Otherwise ask every time Navisworks starts while an update is available.
-            if ((bool?)s["autoUpdate"] ?? false) { if (!AlreadyQueued(s, f.Tag)) Download(f, false); return; }
+            s.Remove("autoUpdate"); // always ask: no way to switch the prompt off
             Prompt(s, f);
         }
 
@@ -162,32 +162,31 @@ namespace NavisBridge
             BridgePlugin.Log("update prompt shown for " + f.Tag);
             bool autoOpt; var choice = Ask(f, strong, (int)age, out autoOpt);
             BridgePlugin.Log("update prompt answer: " + choice);
-            if (autoOpt) s["autoUpdate"] = true;
             if (choice == DialogResult.Yes) { s.Remove("snoozeUntilUtc"); Save(s); Download(f, true); }
             else { s.Remove("snoozeUntilUtc"); Save(s); }
         }
 
         static DialogResult Ask(Found f, bool strong, int ageDays, out bool autoOpt)
         {
+            autoOpt = false;
             using (var form = new Form())
             {
                 form.Text = "AI Connect update";
                 form.FormBorderStyle = FormBorderStyle.FixedDialog; form.MaximizeBox = false; form.MinimizeBox = false;
-                form.StartPosition = FormStartPosition.CenterScreen; form.ClientSize = new Size(460, 190); form.TopMost = true;
-                var msg = new Label { Left = 16, Top = 14, Width = 430, Height = 80, Text =
-                    "AI Connect " + f.Tag.TrimStart('v') + " is available (you have " + BridgePlugin.Ver + ")." +
-                    (strong ? "\r\n\r\nThis release is " + ageDays + " days old. Updating is recommended." : "") +
-                    "\r\n\r\nThe update installs when you close Navisworks (Windows will ask for administrator permission)." };
-                var chk = new CheckBox { Left = 16, Top = 100, Width = 430, Text = "Update automatically in the future (I will still be asked by Windows)" };
-                var yes = new Button { Text = "Update", Left = 196, Top = 142, Width = 120, DialogResult = DialogResult.Yes };
-                var no = new Button { Text = "Ask me next time", Left = 326, Top = 142, Width = 120, DialogResult = DialogResult.No };
-                var web = new LinkLabel { Text = "What's new", Left = 16, Top = 148, Width = 100 };
+                form.StartPosition = FormStartPosition.CenterScreen; form.ClientSize = new Size(640, 300); form.TopMost = true;
+                var title = new Label { Left = 24, Top = 20, Width = 590, Height = 40, Font = new Font("Segoe UI", 16f, FontStyle.Bold),
+                    Text = "New version " + f.Tag.TrimStart('v') + " is ready" };
+                var msg = new Label { Left = 24, Top = 72, Width = 590, Height = 120, Font = new Font("Segoe UI", 12f), Text =
+                    "You have " + BridgePlugin.Ver + "." +
+                    (strong ? "\r\nThis release is " + ageDays + " days old." : "") +
+                    "\r\n\r\nClick Update. It installs when you close Navisworks." };
+                var yes = new Button { Text = "Update", Left = 270, Top = 220, Width = 160, Height = 44, Font = new Font("Segoe UI", 12f, FontStyle.Bold), DialogResult = DialogResult.Yes };
+                var no = new Button { Text = "Ask me next time", Left = 446, Top = 220, Width = 168, Height = 44, Font = new Font("Segoe UI", 11f), DialogResult = DialogResult.No };
+                var web = new LinkLabel { Text = "What's new", Left = 24, Top = 232, Width = 160, Font = new Font("Segoe UI", 11f) };
                 web.LinkClicked += (a, b) => { try { Process.Start(f.Page); } catch { } };
-                form.Controls.AddRange(new Control[] { msg, chk, yes, no, web });
+                form.Controls.AddRange(new Control[] { title, msg, web, yes, no });
                 form.AcceptButton = yes; form.CancelButton = no;
-                var r = form.ShowDialog();
-                autoOpt = chk.Checked && r == DialogResult.Yes;
-                return r;
+                return form.ShowDialog();
             }
         }
 

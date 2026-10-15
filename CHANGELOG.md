@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.1
+- Bigger, easier-to-read update window. The "update automatically / stop asking" option is removed: the prompt always appears when an update is available.
+
 ## 1.4.0
 - New: `list_hidden_items` shows what is hidden in the view. `create_selection_set_from_items` makes one saved selection set from exact items: all hidden items, the current selection, or a list of GUIDs.
 
