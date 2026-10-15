@@ -5,7 +5,7 @@
 const BRIDGE = process.env.NAVIS_BRIDGE_URL || 'http://127.0.0.1:47800/';
 const fs = require('fs');
 const path = require('path');
-const VERSION = '1.4.2';
+const VERSION = '1.4.3';
 
 // Shared secret: NAVIS_BRIDGE_TOKEN if set, otherwise the file the Navisworks plugin creates in the user's profile.
 function readToken() {
@@ -55,7 +55,7 @@ const TOOLS = [
   { name: 'list_animations', annotations: { readOnlyHint: true }, description: 'List saved viewpoint animations (name, number of frames, cuts, smoothing, loops).', inputSchema: { type: 'object', properties: {} } },
   { name: 'get_animation', annotations: { readOnlyHint: true }, description: 'Read one viewpoint animation: every frame with camera position, and how far the camera moves and turns between frames, plus cuts (pauses) and totals. Navisworks does not expose per-frame times, so use travel and turn to judge pacing and flow.', inputSchema: { type: 'object', properties: { name: str('Animation name') }, required: ['name'] } },
   { name: 'go_to_viewpoint', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Switch the Navisworks view to a saved viewpoint (or animation frame) by name.', inputSchema: { type: 'object', properties: { name: str('Viewpoint name') }, required: ['name'] } },
-  { name: 'list_hidden_items', annotations: { readOnlyHint: true }, description: 'List the items currently hidden in the Navisworks view (top-level hidden items, with name, class, GUID, path and source file).', inputSchema: { type: 'object', properties: { limit: num('Max items (default 200)') } } },
+  { name: 'list_hidden_items', annotations: { readOnlyHint: true }, description: 'List the items currently hidden in the Navisworks view (top-level hidden items, with name, class, GUID, path and source file).', inputSchema: { type: 'object', properties: { limit: num('Max items (default 200)'), restart: { type: 'boolean', description: 'Start a new scan instead of continuing' } } } },
   { name: 'create_selection_set_from_items', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Create one saved selection set from exact items: all currently hidden items (source "hidden"), the current selection in Navisworks (source "selected"), or a list of item GUIDs (source "guids").', inputSchema: { type: 'object', properties: { name: str('Name of the new set'), source: { type: 'string', enum: ['hidden', 'selected', 'guids'], description: 'Where the items come from' }, guids: { type: 'array', items: { type: 'string' }, description: 'Item GUIDs, when source is "guids"' }, limit: num('Max items when source is hidden (default 5000)') }, required: ['name', 'source'] } },
 ];
 

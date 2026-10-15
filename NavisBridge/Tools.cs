@@ -555,28 +555,35 @@ namespace NavisBridge
 
         private static bool Expired(DateTime started, double seconds) { return (DateTime.UtcNow - started).TotalSeconds > seconds; }
 
-        // Walks the model tree level by level (breadth-first), so hidden items near the top are found in seconds.
-        // A hidden item is reported and not searched further (its children are hidden with it).
-        private static List<ModelItem> FindHidden(int limit, out bool truncated)
+        // Walks the model tree level by level (breadth-first). Big models are scanned in slices of ~30 s:
+        // each call continues where the last one stopped until Done is true.
+        private class HiddenScan { public List<ModelItem> Level = new List<ModelItem>(), Next = new List<ModelItem>(), Found = new List<ModelItem>(); public int Pos, Scanned; public bool Done; }
+        private static HiddenScan _scan;
+
+        private static HiddenScan ScanHidden(bool restart, bool reuseDone = false)
         {
-            var list = new List<ModelItem>();
-            truncated = false;
-            var started = DateTime.UtcNow;
-            var level = new List<ModelItem>();
-            foreach (var m in Doc.Models) level.Add(m.RootItem);
-            int count = 0;
-            while (level.Count > 0)
+            if (reuseDone && !restart && _scan != null && _scan.Done) return _scan;
+            if (restart || _scan == null || _scan.Done)
             {
-                var next = new List<ModelItem>();
-                foreach (var item in level)
-                {
-                    if ((++count & 255) == 0 && Expired(started, 60)) { truncated = true; return list; }
-                    if (item.IsHidden) { list.Add(item); if (list.Count >= limit) { truncated = true; return list; } continue; }
-                    foreach (var c in item.Children) next.Add(c);
-                }
-                level = next;
+                _scan = new HiddenScan();
+                foreach (var m in Doc.Models) _scan.Level.Add(m.RootItem);
             }
-            return list;
+            var sc = _scan;
+            var started = DateTime.UtcNow;
+            while (!sc.Done)
+            {
+                if (sc.Pos >= sc.Level.Count)
+                {
+                    if (sc.Next.Count == 0) { sc.Done = true; break; }
+                    sc.Level = sc.Next; sc.Next = new List<ModelItem>(); sc.Pos = 0;
+                }
+                var item = sc.Level[sc.Pos++];
+                sc.Scanned++;
+                if ((sc.Scanned & 127) == 0 && Expired(started, 30)) break;
+                if (item.IsHidden) { sc.Found.Add(item); continue; }
+                foreach (var c in item.Children) sc.Next.Add(c);
+            }
+            return sc;
         }
 
         private static string PathOf(ModelItem it)
@@ -590,9 +597,9 @@ namespace NavisBridge
         private static JToken ListHiddenItems(JObject a)
         {
             int limit = (int?)a["limit"] ?? 200;
-            var hidden = FindHidden(limit, out bool truncated);
+            var sc = ScanHidden((bool?)a["restart"] ?? false);
             var arr = new JArray();
-            foreach (var it in hidden)
+            foreach (var it in sc.Found.GetRange(0, Math.Min(limit, sc.Found.Count)))
                 arr.Add(new JObject
                 {
                     ["name"] = it.DisplayName,
@@ -604,8 +611,9 @@ namespace NavisBridge
             return new JObject
             {
                 ["hiddenFound"] = arr.Count,
-                ["truncated"] = truncated,
-                ["note"] = "Top-level hidden items only; children of a hidden item are hidden with it.",
+                ["done"] = sc.Done,
+                ["itemsScanned"] = sc.Scanned,
+                ["note"] = sc.Done ? "Top-level hidden items only; children of a hidden item are hidden with it." : "Scan not finished (big model). Call list_hidden_items again to continue; hidden items found so far are listed.",
                 ["items"] = arr
             };
         }
@@ -624,7 +632,9 @@ namespace NavisBridge
             var items = new ModelItemCollection();
             if (source == "hidden")
             {
-                bool trunc; foreach (var it in FindHidden((int?)a["limit"] ?? 5000, out trunc)) items.Add(it);
+                var sc = ScanHidden(false, true);
+                if (!sc.Done) throw new ArgumentException("Hidden-item scan is not finished yet (" + sc.Scanned + " items scanned). Call list_hidden_items until done is true, then create the set.");
+                foreach (var it in sc.Found) items.Add(it);
             }
             else if (source == "selected")
             {

@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.3
+- `list_hidden_items` scans big models in slices (call again until `done`), so it never times out. The set tool reuses the finished scan.
+
 ## 1.4.2
 - `list_hidden_items` now searches level by level, so hidden items near the top of big models are found in seconds instead of timing out.
 
