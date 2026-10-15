@@ -117,7 +117,9 @@ Optional environment variables for the server and plugin:
 
 Overlap review (view only): `inspect_clash_result`, `focus_clash_result`, `set_clash_item_visibility`, `set_visibility`, `reset_visibility`, `set_clash_result_status`.
 
-Hidden items and exact sets: `list_hidden_items`, `create_selection_set_from_items`.\n\nAnimations (read only): `list_animations`, `get_animation`, `go_to_viewpoint`.
+Hidden items and exact sets: `list_hidden_items`, `create_selection_set_from_items`.\n\nHidden items and exact sets: `list_hidden_items`, `create_selection_set_from_items`.
+
+Animations (read only): `list_animations`, `get_animation`, `go_to_viewpoint`.
 Arguments and examples: [docs/TOOLS.md](docs/TOOLS.md).
 
 ## 6. Update, rebuild, uninstall

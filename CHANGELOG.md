@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.0
+- New: `list_hidden_items` shows what is hidden in the view. `create_selection_set_from_items` makes one saved selection set from exact items: all hidden items, the current selection, or a list of GUIDs.
+
 ## 1.3.1
 - The update window now appears every time Navisworks starts while a newer version exists. The button "Remind me later" is now "Ask me next time" and no longer silences the prompt for a day. (With "Update automatically" ticked, the update is still downloaded quietly.)
 
