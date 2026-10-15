@@ -1,10 +1,12 @@
 @echo off
-REM Run this ONCE. It starts the build helper now and every time you log in to Windows. No admin rights needed.
+REM Run this ONCE. Starts the build helper now and every time you log in to Windows. No admin rights needed.
 setlocal
 set "SCRIPT=%~dp0build-watcher.ps1"
-schtasks /Create /F /TN "AI Connect Build Watcher" /SC ONLOGON /TR "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%SCRIPT%\"" >nul
-if errorlevel 1 (echo Could not create the scheduled task. & pause & exit /b 1)
-schtasks /Run /TN "AI Connect Build Watcher" >nul
+set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+set "VBS=%STARTUP%\AI Connect Build Watcher.vbs"
+> "%VBS%" echo CreateObject("WScript.Shell").Run "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""%SCRIPT%""", 0, False
+if not exist "%VBS%" (echo Could not write to the Startup folder. & pause & exit /b 1)
+wscript.exe "%VBS%"
 echo Done. The build helper is running. You can close this window.
-echo To remove it later: schtasks /Delete /TN "AI Connect Build Watcher" /F
+echo To remove it later: delete "%VBS%"
 pause
