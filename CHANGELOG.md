@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.5
+- Update popup appears ~8 s after Navisworks starts (was 25 s).
+- Selection set from GUIDs now looks level by level, so it works on huge models. `allowPartial` lets the hidden-items set use what the scan found so far.
+
 ## 1.4.4
 - Fix: the hidden-items scan could skip one item at the point where a slice paused. Found in audit.
 

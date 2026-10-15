@@ -34,7 +34,7 @@ namespace NavisBridge
             {
                 if (Environment.GetEnvironmentVariable("AI_CONNECT_NO_UPDATE_CHECK") == "1") return;
                 // Runs on the Navisworks UI thread: this timer ticks there as well.
-                _timer = new Timer { Interval = 25000 };
+                _timer = new Timer { Interval = 8000 };
                 _timer.Tick += (s, e) => { _timer.Stop(); _timer.Dispose(); _timer = null; Updater.Start(); };
                 _timer.Start();
             }

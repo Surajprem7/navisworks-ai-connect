@@ -618,11 +618,24 @@ namespace NavisBridge
             };
         }
 
-        private static void CollectByGuid(ModelItem item, HashSet<Guid> wanted, ModelItemCollection into, DateTime started)
+        // Looks the items up level by level (breadth-first), so items near the top are found in seconds.
+        private static void CollectByGuid(HashSet<Guid> wanted, ModelItemCollection into)
         {
-            if (wanted.Count == 0 || Expired(started, 30)) return;
-            if (wanted.Remove(item.InstanceGuid)) { into.Add(item); if (wanted.Count == 0) return; }
-            foreach (var c in item.Children) { CollectByGuid(c, wanted, into, started); if (wanted.Count == 0) return; }
+            var started = DateTime.UtcNow;
+            var level = new List<ModelItem>();
+            foreach (var m in Doc.Models) level.Add(m.RootItem);
+            int count = 0;
+            while (level.Count > 0 && wanted.Count > 0)
+            {
+                var next = new List<ModelItem>();
+                foreach (var item in level)
+                {
+                    if ((++count & 127) == 0 && Expired(started, 35)) return;
+                    if (wanted.Remove(item.InstanceGuid)) { into.Add(item); if (wanted.Count == 0) return; }
+                    foreach (var c in item.Children) next.Add(c);
+                }
+                level = next;
+            }
         }
 
         private static JToken CreateSetFromItems(JObject a)
@@ -633,7 +646,7 @@ namespace NavisBridge
             if (source == "hidden")
             {
                 var sc = ScanHidden(false, true);
-                if (!sc.Done) throw new ArgumentException("Hidden-item scan is not finished yet (" + sc.Scanned + " items scanned). Call list_hidden_items until done is true, then create the set.");
+                if (!sc.Done && !((bool?)a["allowPartial"] ?? false)) throw new ArgumentException("Hidden-item scan is not finished yet (" + sc.Scanned + " items scanned). Call list_hidden_items until done is true, then create the set.");
                 foreach (var it in sc.Found) items.Add(it);
             }
             else if (source == "selected")
@@ -645,8 +658,7 @@ namespace NavisBridge
                 var wanted = new HashSet<Guid>();
                 if (a["guids"] is JArray ga) foreach (var g in ga) { Guid gg; if (Guid.TryParse((string)g, out gg)) wanted.Add(gg); }
                 if (wanted.Count == 0) throw new ArgumentException("guids is required when source is guids");
-                var started = DateTime.UtcNow;
-                foreach (var m in Doc.Models) CollectByGuid(m.RootItem, wanted, items, started);
+                CollectByGuid(wanted, items);
             }
             else throw new ArgumentException("source must be hidden, selected or guids");
             if (items.Count == 0) throw new ArgumentException("No items found for source: " + source);
