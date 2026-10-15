@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Navisworks AI Connect"
+type: software
+authors:
+  - alias: "Surajprem7"
+repository-code: "https://github.com/Surajprem7/navisworks-ai-connect"
+license: MIT
+date-released: 2026-10-15

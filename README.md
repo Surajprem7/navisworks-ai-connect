@@ -164,5 +164,5 @@ docs/                       tools reference and troubleshooting
 
 A debug log is written to `%TEMP%\navisbridge.log`. Ribbon icon glyph from [Lucide](https://lucide.dev) (ISC, see `NOTICE/`).
 
-## Licence
-MIT, see `LICENSE`.
+## Licence and credit
+MIT, see `LICENSE`. Free to use and build on, including commercially, as long as the copyright notice and licence stay with it: you may not remove the author's name or claim the work as your own. Third-party components, trademarks and how to cite: see [`CREDITS.md`](CREDITS.md). Not affiliated with Autodesk or Anthropic.
