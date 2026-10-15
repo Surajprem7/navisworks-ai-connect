@@ -5,7 +5,7 @@ set "SCRIPT=%~dp0build-watcher.ps1"
 set "CMD=powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%SCRIPT%\""
 
 REM 1) Start it right now.
-start "" /B powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%SCRIPT%"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"%SCRIPT%\"'"
 
 REM 2) Start it at every login (per-user registry key, no admin needed).
 reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "AIConnectBuildWatcher" /t REG_SZ /d "%CMD%" /f >nul 2>nul
