@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.2
+- `list_hidden_items` now searches level by level, so hidden items near the top of big models are found in seconds instead of timing out.
+
 ## 1.4.1
 - Bigger, easier-to-read update window. The "update automatically / stop asking" option is removed: the prompt always appears when an update is available.
 

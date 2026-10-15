@@ -555,21 +555,27 @@ namespace NavisBridge
 
         private static bool Expired(DateTime started, double seconds) { return (DateTime.UtcNow - started).TotalSeconds > seconds; }
 
-        // Walks the model tree. A hidden item is reported and not searched further (its children are hidden with it).
-        private static void CollectHidden(ModelItem item, List<ModelItem> into, int limit, DateTime started, ref bool truncated)
-        {
-            if (truncated) return;
-            if (item.IsHidden) { into.Add(item); if (into.Count >= limit) truncated = true; return; }
-            if (Expired(started, 30)) { truncated = true; return; }
-            foreach (var c in item.Children) { CollectHidden(c, into, limit, started, ref truncated); if (truncated) return; }
-        }
-
+        // Walks the model tree level by level (breadth-first), so hidden items near the top are found in seconds.
+        // A hidden item is reported and not searched further (its children are hidden with it).
         private static List<ModelItem> FindHidden(int limit, out bool truncated)
         {
             var list = new List<ModelItem>();
             truncated = false;
             var started = DateTime.UtcNow;
-            foreach (var m in Doc.Models) { CollectHidden(m.RootItem, list, limit, started, ref truncated); if (truncated) break; }
+            var level = new List<ModelItem>();
+            foreach (var m in Doc.Models) level.Add(m.RootItem);
+            int count = 0;
+            while (level.Count > 0)
+            {
+                var next = new List<ModelItem>();
+                foreach (var item in level)
+                {
+                    if ((++count & 255) == 0 && Expired(started, 60)) { truncated = true; return list; }
+                    if (item.IsHidden) { list.Add(item); if (list.Count >= limit) { truncated = true; return list; } continue; }
+                    foreach (var c in item.Children) next.Add(c);
+                }
+                level = next;
+            }
             return list;
         }
 
