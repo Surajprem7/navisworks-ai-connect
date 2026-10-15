@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.1
+- The update window now appears every time Navisworks starts while a newer version exists. The button "Remind me later" is now "Ask me next time" and no longer silences the prompt for a day. (With "Update automatically" ticked, the update is still downloaded quietly.)
+
 ## 1.3.0
 - New: `list_animations` and `get_animation` read saved viewpoint animations (frames, camera position, how far the camera moves and turns between frames, cuts, smoothing, loops). `go_to_viewpoint` switches the view to a saved viewpoint or animation frame. Navisworks does not expose per-frame times, so pacing is judged from travel and turn.
 

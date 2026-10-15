@@ -150,8 +150,8 @@ namespace NavisBridge
             if (f == null || !SafeUrl(f.Url) || !SafeUrl(f.ShaUrl) || !Newer(f.Tag, BridgePlugin.Ver)) { s.Remove("pending"); Save(s); return; }
             s["pending"] = new JObject { ["tag"] = f.Tag, ["url"] = f.Url, ["sha"] = f.ShaUrl, ["page"] = f.Page, ["published"] = f.Published };
             Save(s);
-            if (AlreadyQueued(s, f.Tag)) return;
-            if ((bool?)s["autoUpdate"] ?? false) { Download(f, false); return; }
+            // Auto-update mode: download quietly (once per version). Otherwise ask every time Navisworks starts while an update is available.
+            if ((bool?)s["autoUpdate"] ?? false) { if (!AlreadyQueued(s, f.Tag)) Download(f, false); return; }
             Prompt(s, f);
         }
 
@@ -159,14 +159,12 @@ namespace NavisBridge
         {
             double age = (DateTime.UtcNow - f.Published).TotalDays;
             bool strong = age >= StrongReminderDays;
-            var snooze = (DateTime?)s["snoozeUntilUtc"];
-            if (snooze.HasValue && DateTime.UtcNow < snooze.Value && !strong) { BridgePlugin.Log("update prompt snoozed until " + snooze.Value.ToString("u")); return; }
             BridgePlugin.Log("update prompt shown for " + f.Tag);
             bool autoOpt; var choice = Ask(f, strong, (int)age, out autoOpt);
             BridgePlugin.Log("update prompt answer: " + choice);
             if (autoOpt) s["autoUpdate"] = true;
             if (choice == DialogResult.Yes) { s.Remove("snoozeUntilUtc"); Save(s); Download(f, true); }
-            else { if (!strong) s["snoozeUntilUtc"] = DateTime.UtcNow.AddDays(1); Save(s); }
+            else { s.Remove("snoozeUntilUtc"); Save(s); }
         }
 
         static DialogResult Ask(Found f, bool strong, int ageDays, out bool autoOpt)
@@ -182,7 +180,7 @@ namespace NavisBridge
                     "\r\n\r\nThe update installs when you close Navisworks (Windows will ask for administrator permission)." };
                 var chk = new CheckBox { Left = 16, Top = 100, Width = 430, Text = "Update automatically in the future (I will still be asked by Windows)" };
                 var yes = new Button { Text = "Update", Left = 196, Top = 142, Width = 120, DialogResult = DialogResult.Yes };
-                var no = new Button { Text = strong ? "Not now" : "Remind me later", Left = 326, Top = 142, Width = 120, DialogResult = DialogResult.No };
+                var no = new Button { Text = "Ask me next time", Left = 326, Top = 142, Width = 120, DialogResult = DialogResult.No };
                 var web = new LinkLabel { Text = "What's new", Left = 16, Top = 148, Width = 100 };
                 web.LinkClicked += (a, b) => { try { Process.Start(f.Page); } catch { } };
                 form.Controls.AddRange(new Control[] { msg, chk, yes, no, web });
