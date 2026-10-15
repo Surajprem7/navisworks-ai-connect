@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using System.Linq;
 using Autodesk.Navisworks.Api;
 using Autodesk.Navisworks.Api.Clash;
@@ -36,6 +38,11 @@ namespace NavisBridge
                 case "get_animation": return GetAnimation(a);
                 case "go_to_viewpoint": return GoToViewpoint(a);
                 case "set_clash_result_status": return SetClashResultStatus(a);
+                case "get_item_properties": return GetItemProperties(a);
+                case "color_items": return ColorItems(a);
+                case "reset_colors": return ResetColors();
+                case "list_models": return ListModels();
+                case "export_clash_report": return ExportClashReport(a);
                 default: throw new ArgumentException("Unknown tool: " + tool);
             }
         }
@@ -683,6 +690,121 @@ namespace NavisBridge
             var set = new SelectionSet(items) { DisplayName = name };
             Doc.SelectionSets.AddCopy(set);
             return new JObject { ["created"] = name, ["source"] = source, ["items"] = items.Count };
+        }
+
+        // ---------- properties, colours, models, reports (1.5.0) ----------
+
+        // Items from the current selection ("selected"), a saved set ("set" + name), or a property search.
+        private static ModelItemCollection ResolveItems(JObject a)
+        {
+            string source = ((string)a["source"] ?? "").ToLowerInvariant();
+            if (source == "selected")
+            {
+                var sel = new ModelItemCollection();
+                sel.CopyFrom(Doc.CurrentSelection.SelectedItems);
+                return sel;
+            }
+            if (source == "set")
+            {
+                var ss = FindSet((string)a["set"] ?? throw new ArgumentException("set (the set name) is required when source is set"));
+                var col = new ModelItemCollection();
+                col.CopyFrom(ss.GetSelectedItems(Doc));
+                return col;
+            }
+            return FindItems(a, out _);
+        }
+
+        private static JToken GetItemProperties(JObject a)
+        {
+            var items = ResolveItems(a);
+            int limit = Math.Max(1, Math.Min((int?)a["limit"] ?? 5, 25));
+            int maxProps = Math.Max(1, Math.Min((int?)a["maxProperties"] ?? 80, 400));
+            var arr = new JArray();
+            foreach (var it in items.Take(limit)) arr.Add(Describe(it, maxProps));
+            return new JObject { ["totalFound"] = items.Count, ["returned"] = arr.Count, ["items"] = arr };
+        }
+
+        private static Color ParseColor(string text)
+        {
+            string t = (text ?? "").Trim().ToLowerInvariant();
+            switch (t)
+            {
+                case "red": t = "#E53935"; break;
+                case "green": t = "#43A047"; break;
+                case "blue": t = "#1E88E5"; break;
+                case "yellow": t = "#FDD835"; break;
+                case "orange": t = "#FB8C00"; break;
+                case "purple": t = "#8E24AA"; break;
+                case "cyan": t = "#00ACC1"; break;
+                case "pink": t = "#EC407A"; break;
+                case "grey": case "gray": t = "#9E9E9E"; break;
+                case "white": t = "#FFFFFF"; break;
+                case "black": t = "#000000"; break;
+            }
+            if (t.StartsWith("#")) t = t.Substring(1);
+            if (t.Length != 6) throw new ArgumentException("color must be a name (red, green, blue, yellow, orange, purple, cyan, pink, grey, white, black) or #RRGGBB");
+            return Color.FromByteRGB(Convert.ToByte(t.Substring(0, 2), 16), Convert.ToByte(t.Substring(2, 2), 16), Convert.ToByte(t.Substring(4, 2), 16));
+        }
+
+        // View-only: temporary overrides are not saved into the model.
+        private static JToken ColorItems(JObject a)
+        {
+            var items = ResolveItems(a);
+            if (items.Count == 0) throw new ArgumentException("No items matched");
+            var color = ParseColor((string)a["color"] ?? throw new ArgumentException("color is required"));
+            Doc.Models.OverrideTemporaryColor(items, color);
+            double? tr = (double?)a["transparency"];
+            if (tr.HasValue) Doc.Models.OverrideTemporaryTransparency(items, Math.Max(0, Math.Min(1, tr.Value)));
+            return new JObject { ["colored"] = items.Count, ["color"] = (string)a["color"], ["note"] = "View-only. Use reset_colors to undo." };
+        }
+
+        private static JToken ResetColors()
+        {
+            Doc.Models.ResetAllTemporaryMaterials();
+            return new JObject { ["reset"] = true };
+        }
+
+        private static JToken ListModels()
+        {
+            var arr = new JArray();
+            foreach (var m in Doc.Models)
+            {
+                int children = 0;
+                try { children = m.RootItem.Children.Count(); } catch { }
+                arr.Add(new JObject { ["file"] = m.FileName, ["root"] = m.RootItem.DisplayName, ["topLevelChildren"] = children });
+            }
+            return new JObject { ["fileName"] = Doc.FileName, ["title"] = Doc.Title, ["models"] = arr };
+        }
+
+        private static string Csv(string v)
+        {
+            if (v == null) return "";
+            if (v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0) return "\"" + v.Replace("\"", "\"\"") + "\"";
+            return v;
+        }
+
+        // Writes a CSV report to Documents\AI Connect\reports (a new file every time, nothing is overwritten).
+        private static JToken ExportClashReport(JObject a)
+        {
+            var t = FindTest((string)a["name"] ?? throw new ArgumentException("name is required"));
+            var arr = new JArray();
+            CollectResults(t, "", arr, int.MaxValue, (string)a["status"]);
+            var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "AI Connect", "reports");
+            Directory.CreateDirectory(dir);
+            string safe = string.Concat(t.DisplayName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+            var file = Path.Combine(dir, safe + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".csv");
+            var sb = new StringBuilder();
+            sb.AppendLine("Name,Group,Status,Distance,Item 1,Item 2,Item 1 GUID,Item 2 GUID,Center X,Center Y,Center Z");
+            foreach (JObject r in arr)
+            {
+                var c = r["center"] as JArray;
+                sb.AppendLine(string.Join(",", new[] {
+                    Csv((string)r["name"]), Csv((string)r["group"]), Csv((string)r["status"]), Csv((string)r["distance"]),
+                    Csv((string)r["item1"]), Csv((string)r["item2"]), Csv((string)r["item1Guid"]), Csv((string)r["item2Guid"]),
+                    c != null ? Csv((string)c[0]) : "", c != null ? Csv((string)c[1]) : "", c != null ? Csv((string)c[2]) : "" }));
+            }
+            File.WriteAllText(file, sb.ToString(), new UTF8Encoding(true));
+            return new JObject { ["test"] = t.DisplayName, ["results"] = arr.Count, ["file"] = file };
         }
     }
 }

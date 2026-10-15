@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0
+- New tools: `get_item_properties` (read all properties of selected items, set items or search results), `color_items` and `reset_colors` (view-only colour and transparency), `list_models`, `export_clash_report` (CSV file).
+- README: fixed a duplicated line in the tool list.
+
 ## 1.4.7
 - `list_hidden_items` can leave out items already stored in saved sets (`excludeSets`, use "*" for all sets), which makes scans of big models shorter and the new set contain only new items.
 

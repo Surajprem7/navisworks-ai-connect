@@ -17,6 +17,11 @@ Property conditions use the names you see in Navisworks' **Find Items** / **Prop
 | `create_clash_test` | `name`, `selection_set_a`, `selection_set_b`, `tolerance?` (0), `type?` (`Hard`, `HardConservative`, `Clearance`, `Duplicate`) | Creates a test between two **saved selection sets** (create them first). |
 | `run_clash_test` | `name?` (omit or `*` = all) | Runs one or all tests. |
 | `get_clash_results` | `name`, `status?`, `limit?` (100) | Results, optionally filtered (New, Active, Reviewed, Approved, Resolved). |
+| `get_item_properties` | `source?` (`selected`, `set`, or search by default), `set?`, search conditions, `limit?` (5), `maxProperties?` (80) | Full properties of items: name, class, path, source file, hidden state, every property tab. |
+| `color_items` | `color`, `transparency?` (0 to 1), `source?`, `set?`, search conditions | Colours items in the view. View only, the model is not changed. |
+| `reset_colors` | none | Removes all colour and transparency overrides. |
+| `list_models` | none | Files loaded in the project, with root name and top-level child count. |
+| `export_clash_report` | `name`, `status?` | Saves clash results as a CSV in `Documents\AI Connect\reports` (new file each time). |
 
 Tested live: model info, search, viewpoints, selection-set and clash-test listing. Creating and running clash tests is
 implemented against the documented API but has had less field testing, so verify the first results in Clash Detective.
