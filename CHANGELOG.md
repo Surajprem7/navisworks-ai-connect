@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.2
+- Fix: `list_hidden_items` and hidden-item sets found nothing on large models (the search went depth-first and ran out of time inside the first big file). It now searches level by level, so hidden files and high-level nodes are found within seconds.
+
 ## 1.4.1
 - Bigger, easier-to-read update window. The "update automatically / stop asking" option is removed: the prompt always appears when an update is available.
 

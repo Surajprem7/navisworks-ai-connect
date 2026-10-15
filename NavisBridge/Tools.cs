@@ -555,21 +555,27 @@ namespace NavisBridge
 
         private static bool Expired(DateTime started, double seconds) { return (DateTime.UtcNow - started).TotalSeconds > seconds; }
 
-        // Walks the model tree. A hidden item is reported and not searched further (its children are hidden with it).
-        private static void CollectHidden(ModelItem item, List<ModelItem> into, int limit, DateTime started, ref bool truncated)
-        {
-            if (truncated) return;
-            if (item.IsHidden) { into.Add(item); if (into.Count >= limit) truncated = true; return; }
-            if (Expired(started, 30)) { truncated = true; return; }
-            foreach (var c in item.Children) { CollectHidden(c, into, limit, started, ref truncated); if (truncated) return; }
-        }
-
         private static List<ModelItem> FindHidden(int limit, out bool truncated)
         {
+            // Breadth-first: hidden items are usually whole files or high-level nodes, so they are found early.
+            // (Depth-first spent the whole time budget inside the first large file and found nothing.)
             var list = new List<ModelItem>();
             truncated = false;
             var started = DateTime.UtcNow;
-            foreach (var m in Doc.Models) { CollectHidden(m.RootItem, list, limit, started, ref truncated); if (truncated) break; }
+            var queue = new Queue<ModelItem>();
+            foreach (var m in Doc.Models) queue.Enqueue(m.RootItem);
+            while (queue.Count > 0)
+            {
+                if (Expired(started, 35)) { truncated = true; break; }
+                var it = queue.Dequeue();
+                if (it.IsHidden)
+                {
+                    list.Add(it); // its children are hidden with it, no need to look inside
+                    if (list.Count >= limit) { truncated = true; break; }
+                    continue;
+                }
+                foreach (var c in it.Children) queue.Enqueue(c);
+            }
             return list;
         }
 
