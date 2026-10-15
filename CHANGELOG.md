@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.6
+- The version number is shown on the AI Connect ribbon panel and button tooltip.
+
 ## 1.4.5
 - Update popup appears ~8 s after Navisworks starts (was 25 s).
 - Selection set from GUIDs now looks level by level, so it works on huge models. `allowPartial` lets the hidden-items set use what the scan found so far.
