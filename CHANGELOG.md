@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.4
+- Fix: the hidden-items scan could skip one item at the point where a slice paused. Found in audit.
+
 ## 1.4.3
 - `list_hidden_items` scans big models in slices (call again until `done`), so it never times out. The set tool reuses the finished scan.
 

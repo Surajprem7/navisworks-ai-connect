@@ -577,9 +577,9 @@ namespace NavisBridge
                     if (sc.Next.Count == 0) { sc.Done = true; break; }
                     sc.Level = sc.Next; sc.Next = new List<ModelItem>(); sc.Pos = 0;
                 }
+                if ((sc.Scanned & 127) == 0 && Expired(started, 30)) break;
                 var item = sc.Level[sc.Pos++];
                 sc.Scanned++;
-                if ((sc.Scanned & 127) == 0 && Expired(started, 30)) break;
                 if (item.IsHidden) { sc.Found.Add(item); continue; }
                 foreach (var c in item.Children) sc.Next.Add(c);
             }

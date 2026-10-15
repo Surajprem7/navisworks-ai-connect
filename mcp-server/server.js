@@ -5,7 +5,7 @@
 const BRIDGE = process.env.NAVIS_BRIDGE_URL || 'http://127.0.0.1:47800/';
 const fs = require('fs');
 const path = require('path');
-const VERSION = '1.4.3';
+const VERSION = '1.4.4';
 
 // Shared secret: NAVIS_BRIDGE_TOKEN if set, otherwise the file the Navisworks plugin creates in the user's profile.
 function readToken() {
