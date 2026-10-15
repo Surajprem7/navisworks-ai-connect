@@ -557,15 +557,16 @@ namespace NavisBridge
 
         // Walks the model tree level by level (breadth-first). Big models are scanned in slices of ~30 s:
         // each call continues where the last one stopped until Done is true.
-        private class HiddenScan { public List<ModelItem> Level = new List<ModelItem>(), Next = new List<ModelItem>(), Found = new List<ModelItem>(); public int Pos, Scanned; public bool Done; }
+        private class HiddenScan { public List<ModelItem> Level = new List<ModelItem>(), Next = new List<ModelItem>(), Found = new List<ModelItem>(); public int Pos, Scanned, Skipped; public bool Done; public HashSet<Guid> Exclude; }
         private static HiddenScan _scan;
 
-        private static HiddenScan ScanHidden(bool restart, bool reuseDone = false)
+        private static HiddenScan ScanHidden(bool restart, bool reuseDone = false, JArray excludeSets = null)
         {
             if (reuseDone && !restart && _scan != null && _scan.Done) return _scan;
             if (restart || _scan == null || _scan.Done)
             {
                 _scan = new HiddenScan();
+                if (excludeSets != null && excludeSets.Count > 0) _scan.Exclude = ItemsOfSets(excludeSets);
                 foreach (var m in Doc.Models) _scan.Level.Add(m.RootItem);
             }
             var sc = _scan;
@@ -580,10 +581,26 @@ namespace NavisBridge
                 if ((sc.Scanned & 127) == 0 && Expired(started, 30)) break;
                 var item = sc.Level[sc.Pos++];
                 sc.Scanned++;
+                if (sc.Exclude != null && sc.Exclude.Contains(item.InstanceGuid)) { sc.Skipped++; continue; }
                 if (item.IsHidden) { sc.Found.Add(item); continue; }
                 foreach (var c in item.Children) sc.Next.Add(c);
             }
             return sc;
+        }
+
+        // Items already stored in saved sets ("*" = every set), so they can be left out of a hidden-items scan.
+        private static HashSet<Guid> ItemsOfSets(JArray names)
+        {
+            var all = false; var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var n in names) { var t = (string)n; if (t == "*") all = true; else if (t != null) wanted.Add(t); }
+            var guids = new HashSet<Guid>();
+            Walk(Doc.SelectionSets.Value, "", (si, path) =>
+            {
+                var ss = si as SelectionSet;
+                if (ss == null || !(all || wanted.Contains(ss.DisplayName))) return;
+                try { foreach (var it in ss.GetSelectedItems(Doc)) guids.Add(it.InstanceGuid); } catch { }
+            });
+            return guids;
         }
 
         private static string PathOf(ModelItem it)
@@ -597,7 +614,7 @@ namespace NavisBridge
         private static JToken ListHiddenItems(JObject a)
         {
             int limit = (int?)a["limit"] ?? 200;
-            var sc = ScanHidden((bool?)a["restart"] ?? false);
+            var sc = ScanHidden((bool?)a["restart"] ?? false, false, a["excludeSets"] as JArray);
             var arr = new JArray();
             foreach (var it in sc.Found.GetRange(0, Math.Min(limit, sc.Found.Count)))
                 arr.Add(new JObject
@@ -613,6 +630,7 @@ namespace NavisBridge
                 ["hiddenFound"] = arr.Count,
                 ["done"] = sc.Done,
                 ["itemsScanned"] = sc.Scanned,
+                ["skippedBecauseInExcludedSets"] = sc.Skipped,
                 ["note"] = sc.Done ? "Top-level hidden items only; children of a hidden item are hidden with it." : "Scan not finished (big model). Call list_hidden_items again to continue; hidden items found so far are listed.",
                 ["items"] = arr
             };

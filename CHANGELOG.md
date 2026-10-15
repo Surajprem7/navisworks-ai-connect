@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.7
+- `list_hidden_items` can leave out items already stored in saved sets (`excludeSets`, use "*" for all sets), which makes scans of big models shorter and the new set contain only new items.
+
 ## 1.4.6
 - The version number is shown on the AI Connect ribbon panel and button tooltip.
 

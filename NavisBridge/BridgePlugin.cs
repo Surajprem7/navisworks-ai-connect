@@ -17,9 +17,9 @@ namespace NavisBridge
     [Plugin("NavisBridge.Link", "TXGL", DisplayName = "AI Connect")]
     [RibbonLayout("ClaudeRibbon.xaml")]
     [RibbonTab("ID_ClaudeTab", DisplayName = "AI Connect")]
-    [Command("ID_ClaudeLink_Toggle", DisplayName = "AI Connect v1.4.6", CanToggle = true,
+    [Command("ID_ClaudeLink_Toggle", DisplayName = "AI Connect v1.4.7", CanToggle = true,
         Icon = "Resources\\claude16.png", LargeIcon = "Resources\\claude32.png",
-        ToolTip = "AI Connect v1.4.6: connect or disconnect the AI assistant",
+        ToolTip = "AI Connect v1.4.7: connect or disconnect the AI assistant",
         ExtendedToolTip = "Starts a local link (127.0.0.1:47800) so an AI assistant can search, select, create clash tests and read results. Click again to disconnect.")]
     public class BridgePlugin : CommandHandlerPlugin
     {
