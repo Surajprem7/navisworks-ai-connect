@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.1
+- New: `save_item_viewpoint` makes a viewpoint that points exactly at an item: it selects it, cuts a section box around it, zooms in, waits for the view to settle, saves the viewpoint and checks that the saved viewpoint brings the section box back. `set_section_box` and `get_section` set and read the section box. `delete_viewpoints` removes viewpoints by exact name.
+- Needs a Box section to be enabled once in Navisworks (Viewpoint > Enable Sectioning > Box) so the box format can be copied.
+
 ## 1.5.0
 - New tools: `get_item_properties` (read all properties of selected items, set items or search results), `color_items` and `reset_colors` (view-only colour and transparency), `list_models`, `export_clash_report` (CSV file).
 - README: fixed a duplicated line in the tool list.

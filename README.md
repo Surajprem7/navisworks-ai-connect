@@ -119,6 +119,8 @@ Overlap review (view only): `inspect_clash_result`, `focus_clash_result`, `set_c
 
 Hidden items and exact sets: `list_hidden_items` (scans big models in slices, can skip items already in sets), `create_selection_set_from_items`.
 
+Viewpoints of single items (1.5.1): `save_item_viewpoint`, `set_section_box`, `get_section`, `delete_viewpoints` (section box around an item; needs a Box section enabled once in Navisworks).
+
 Properties, colours and reports (1.5.0): `get_item_properties`, `color_items`, `reset_colors` (view only), `list_models`, `export_clash_report` (CSV in Documents\AI Connect\reports).
 
 Animations (read only): `list_animations`, `get_animation`, `go_to_viewpoint`.

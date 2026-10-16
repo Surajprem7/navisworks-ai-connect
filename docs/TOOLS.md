@@ -22,6 +22,10 @@ Property conditions use the names you see in Navisworks' **Find Items** / **Prop
 | `reset_colors` | none | Removes all colour and transparency overrides. |
 | `list_models` | none | Files loaded in the project, with root name and top-level child count. |
 | `export_clash_report` | `name`, `status?` | Saves clash results as a CSV in `Documents\AI Connect\reports` (new file each time). |
+| `get_section` | none | Reads the section box/planes of the active view (JSON), the model extents and units. |
+| `set_section_box` | `source?` (`selected`/`set`/`search`), `set?`, search fields, `margin?` | Cuts a section box around the items. View only. Needs a Box section enabled once in Navisworks. |
+| `save_item_viewpoint` | `name`, `source?`, `set?`, search fields, `margin?`, `settleMs?` (1500), `restoreSection?` | Selects the item(s), cuts a section box, zooms in, saves the viewpoint, then checks the saved viewpoint brings the section back. |
+| `delete_viewpoints` | `names` (exact names) | Deletes the listed saved viewpoints only. |
 
 Tested live: model info, search, viewpoints, selection-set and clash-test listing. Creating and running clash tests is
 implemented against the documented API but has had less field testing, so verify the first results in Clash Detective.
