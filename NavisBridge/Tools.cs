@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 namespace NavisBridge
 {
     /// <summary>All tools run on the Navisworks UI thread.</summary>
-    public static class Tools
+    public static partial class Tools
     {
         public static JToken Run(string tool, JObject a)
         {
@@ -43,7 +43,14 @@ namespace NavisBridge
                 case "reset_colors": return ResetColors();
                 case "list_models": return ListModels();
                 case "export_clash_report": return ExportClashReport(a);
-                default: throw new ArgumentException("Unknown tool: " + tool);
+                case "get_section": return GetSection();
+                case "set_section_box": return SetSectionBox(a);
+                case "save_item_viewpoint": return SaveItemViewpoint(a);
+                case "delete_viewpoints": return DeleteViewpoints(a);
+                default:
+                    var extra = RunExtra(tool, a);
+                    if (extra != null) return extra;
+                    throw new ArgumentException("Unknown tool: " + tool);
             }
         }
 
@@ -161,7 +168,7 @@ namespace NavisBridge
             var items = FindItems(a, out var search);
             var set = new SelectionSet(search) { DisplayName = name };
             Doc.SelectionSets.AddCopy(set);
-            return new JObject { ["created"] = name, ["itemsMatched"] = items.Count };
+            return new JObject { ["created"] = name, ["itemsMatched"] = items.Count, ["saveReminder"] = SaveNote() };
         }
 
         private static SelectionSet FindSet(string name)
@@ -188,7 +195,7 @@ namespace NavisBridge
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
             var vp = new SavedViewpoint(Doc.CurrentViewpoint.CreateCopy()) { DisplayName = name };
             Doc.SavedViewpoints.AddCopy(vp);
-            return new JObject { ["saved"] = name };
+            return new JObject { ["saved"] = name, ["saveReminder"] = SaveNote() };
         }
 
         // ---------- clash ----------
@@ -564,10 +571,10 @@ namespace NavisBridge
 
         // Walks the model tree level by level (breadth-first). Big models are scanned in slices of ~30 s:
         // each call continues where the last one stopped until Done is true.
-        private class HiddenScan { public List<ModelItem> Level = new List<ModelItem>(), Next = new List<ModelItem>(), Found = new List<ModelItem>(); public int Pos, Scanned, Skipped; public bool Done; public HashSet<Guid> Exclude; }
+        private class HiddenScan { public List<ModelItem> Level = new List<ModelItem>(), Next = new List<ModelItem>(), Found = new List<ModelItem>(); public int Pos, Scanned, Skipped; public bool Done; public DateTime DoneAt; public HashSet<Guid> Exclude; }
         private static HiddenScan _scan;
 
-        private static HiddenScan ScanHidden(bool restart, bool reuseDone = false, JArray excludeSets = null)
+        private static HiddenScan ScanHidden(bool restart, bool reuseDone = false, JArray excludeSets = null, double budgetSeconds = 30)
         {
             if (reuseDone && !restart && _scan != null && _scan.Done) return _scan;
             if (restart || _scan == null || _scan.Done)
@@ -582,10 +589,10 @@ namespace NavisBridge
             {
                 if (sc.Pos >= sc.Level.Count)
                 {
-                    if (sc.Next.Count == 0) { sc.Done = true; break; }
+                    if (sc.Next.Count == 0) { sc.Done = true; sc.DoneAt = DateTime.UtcNow; break; }
                     sc.Level = sc.Next; sc.Next = new List<ModelItem>(); sc.Pos = 0;
                 }
-                if ((sc.Scanned & 127) == 0 && Expired(started, 30)) break;
+                if ((sc.Scanned & 127) == 0 && Expired(started, budgetSeconds)) break;
                 var item = sc.Level[sc.Pos++];
                 sc.Scanned++;
                 if (sc.Exclude != null && sc.Exclude.Contains(item.InstanceGuid)) { sc.Skipped++; continue; }
@@ -689,7 +696,262 @@ namespace NavisBridge
             if (items.Count == 0) throw new ArgumentException("No items found for source: " + source);
             var set = new SelectionSet(items) { DisplayName = name };
             Doc.SelectionSets.AddCopy(set);
-            return new JObject { ["created"] = name, ["source"] = source, ["items"] = items.Count };
+            return new JObject { ["created"] = name, ["source"] = source, ["items"] = items.Count, ["saveReminder"] = SaveNote() };
+        }
+
+
+        // ---------- section box and viewpoints of single items (1.5.1) ----------
+        // The section box is read and written through the active view (GetClippingPlanes / TrySetClippingPlanes, a JSON text that
+        // Navisworks produces itself). The calls are made by name so one build works across Navisworks versions, and every step
+        // reports what it found so a different JSON layout can be diagnosed instead of guessed.
+
+        private static string _clipTemplate;
+
+        private static object ViewCall(string method, params object[] args)
+        {
+            var view = Doc.ActiveView;
+            var types = args.Select(x => x.GetType()).ToArray();
+            var m = view.GetType().GetMethod(method, types) ?? view.GetType().GetMethod(method);
+            if (m == null) throw new InvalidOperationException("This Navisworks version has no View." + method + " call, so section boxes cannot be set from AI Connect here.");
+            return m.Invoke(view, args);
+        }
+
+        private static string GetClipJson() { return ViewCall("GetClippingPlanes") as string; }
+
+        private static bool SetClipJson(string json)
+        {
+            var r = ViewCall("TrySetClippingPlanes", json);
+            return r is bool b && b;
+        }
+
+        private static void Pump(int ms)
+        {
+            var end = DateTime.UtcNow.AddMilliseconds(ms);
+            while (DateTime.UtcNow < end) { System.Windows.Forms.Application.DoEvents(); System.Threading.Thread.Sleep(30); }
+        }
+
+        private static bool BoxOf(ModelItem it, double[] min, double[] max)
+        {
+            BoundingBox3D b = null;
+            try
+            {
+                var m = it.GetType().GetMethod("BoundingBox", Type.EmptyTypes);
+                if (m != null) b = m.Invoke(it, null) as BoundingBox3D;
+                else { var pr = it.GetType().GetProperty("BoundingBox"); if (pr != null) b = pr.GetValue(it, null) as BoundingBox3D; }
+            }
+            catch { }
+            if (b == null) return false;
+            double[] lo = { b.Min.X, b.Min.Y, b.Min.Z }, hi = { b.Max.X, b.Max.Y, b.Max.Z };
+            for (int i = 0; i < 3; i++)
+            {
+                if (double.IsNaN(lo[i]) || double.IsInfinity(lo[i]) || double.IsNaN(hi[i]) || double.IsInfinity(hi[i])) return false;
+                if (lo[i] < min[i]) min[i] = lo[i];
+                if (hi[i] > max[i]) max[i] = hi[i];
+            }
+            return true;
+        }
+
+        private static bool BoxOfItems(ModelItemCollection items, double[] min, double[] max)
+        {
+            for (int i = 0; i < 3; i++) { min[i] = double.MaxValue; max[i] = double.MinValue; }
+            bool any = false;
+            foreach (ModelItem it in items) if (BoxOf(it, min, max)) any = true;
+            return any;
+        }
+
+        private static bool IsNum(JToken t) { return t != null && (t.Type == JTokenType.Float || t.Type == JTokenType.Integer); }
+        private static bool IsVec3(JToken t) { return t is JArray a && a.Count == 3 && a.All(IsNum); }
+        private static bool IsXyz(JToken t)
+        {
+            var o = t as JObject;
+            return o != null && IsNum(o["X"] ?? o["x"]) && IsNum(o["Y"] ?? o["y"]) && IsNum(o["Z"] ?? o["z"]);
+        }
+        private static bool IsVec(JToken t) { return IsVec3(t) || IsXyz(t); }
+        private static void SetVec(JToken t, double[] v)
+        {
+            if (t is JArray a) { for (int i = 0; i < 3; i++) a[i] = new JValue(v[i]); return; }
+            var o = (JObject)t;
+            string[] k = { "X", "Y", "Z" };
+            for (int i = 0; i < 3; i++) { string key = o[k[i]] != null ? k[i] : k[i].ToLowerInvariant(); o[key] = new JValue(v[i]); }
+        }
+        private static JProperty Named(JObject o, string name)
+        {
+            return o.Properties().FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Writes the new corners into every box found in the JSON (Min/Max pairs, or a pair of 3-number lists).
+        private static int PatchBox(JToken t, double[] min, double[] max)
+        {
+            int n = 0;
+            if (t is JObject o)
+            {
+                var pmin = Named(o, "Min"); var pmax = Named(o, "Max");
+                if (pmin != null && pmax != null && IsVec(pmin.Value) && IsVec(pmax.Value)) { SetVec(pmin.Value, min); SetVec(pmax.Value, max); return 1; }
+                foreach (var p in o.Properties().ToList()) n += PatchBox(p.Value, min, max);
+            }
+            else if (t is JArray a)
+            {
+                if (a.Count == 2 && IsVec(a[0]) && IsVec(a[1])) { SetVec(a[0], min); SetVec(a[1], max); return 1; }
+                foreach (var c in a) n += PatchBox(c, min, max);
+            }
+            return n;
+        }
+
+        private static void SetEnabled(JToken t)
+        {
+            if (t is JObject o)
+                foreach (var p in o.Properties().ToList())
+                {
+                    if (string.Equals(p.Name, "Enabled", StringComparison.OrdinalIgnoreCase) && p.Value.Type == JTokenType.Boolean) p.Value = new JValue(true);
+                    else SetEnabled(p.Value);
+                }
+            else if (t is JArray a) foreach (var c in a) SetEnabled(c);
+        }
+
+        private static JObject ModelExtents()
+        {
+            double[] min = new double[3], max = new double[3];
+            var all = new ModelItemCollection();
+            foreach (var m in Doc.Models) all.Add(m.RootItem);
+            if (!BoxOfItems(all, min, max)) return null;
+            return new JObject { ["min"] = new JArray(min), ["max"] = new JArray(max) };
+        }
+
+        private static JToken GetSection()
+        {
+            var view = Doc.ActiveView;
+            var names = new JArray();
+            foreach (var m in view.GetType().GetMethods().Select(x => x.Name).Distinct().OrderBy(x => x))
+                if (m.IndexOf("Clip", StringComparison.OrdinalIgnoreCase) >= 0 || m.IndexOf("Section", StringComparison.OrdinalIgnoreCase) >= 0) names.Add(m);
+            var o = new JObject { ["units"] = Doc.Units.ToString(), ["viewMembers"] = names, ["modelExtents"] = ModelExtents() };
+            try
+            {
+                string json = GetClipJson();
+                o["rawLength"] = json == null ? 0 : json.Length;
+                if (!string.IsNullOrWhiteSpace(json)) { try { o["section"] = JToken.Parse(json); } catch { o["sectionText"] = json; } }
+                else o["note"] = "No section is set in the active view. In Navisworks use Viewpoint > Enable Sectioning > Box, then call this again to see the layout.";
+            }
+            catch (Exception e) { o["error"] = e.Message; }
+            return o;
+        }
+
+        // Puts a section box around the items. Returns what happened so problems can be diagnosed.
+        private static JObject ApplyBox(ModelItemCollection items, double? margin)
+        {
+            double[] min = new double[3], max = new double[3];
+            if (!BoxOfItems(items, min, max)) throw new ArgumentException("Could not measure these items (no geometry bounding box).");
+            double size = Math.Max(max[0] - min[0], Math.Max(max[1] - min[1], max[2] - min[2]));
+            double m = margin ?? Math.Max(size * 0.15, 1e-6);
+            double[] lo = { min[0] - m, min[1] - m, min[2] - m }, hi = { max[0] + m, max[1] + m, max[2] + m };
+
+            string current = GetClipJson();
+            JToken tok = null;
+            if (!string.IsNullOrWhiteSpace(current)) { try { tok = JToken.Parse(current); } catch { } }
+            int patched = tok == null ? 0 : PatchBox(tok.DeepClone(), lo, hi);
+            if (patched == 0 && _clipTemplate != null) { tok = JToken.Parse(_clipTemplate); patched = PatchBox(tok.DeepClone(), lo, hi); }
+            if (tok == null || patched == 0)
+                throw new InvalidOperationException("No section box found to copy the format from. In Navisworks click Viewpoint > Enable Sectioning, choose Box (not Planes), then try again. Current section: " + (current ?? "none"));
+            _clipTemplate = tok.ToString(Newtonsoft.Json.Formatting.None);
+
+            var work = tok.DeepClone();
+            PatchBox(work, lo, hi);
+            SetEnabled(work);
+            string text = work.ToString(Newtonsoft.Json.Formatting.None);
+            bool ok = SetClipJson(text);
+            string after = GetClipJson();
+            bool changed = false;
+            try { changed = !JToken.DeepEquals(JToken.Parse(after), JToken.Parse(current ?? "null")); } catch { }
+            return new JObject
+            {
+                ["applied"] = ok, ["changed"] = changed, ["boxesPatched"] = patched,
+                ["units"] = Doc.Units.ToString(),
+                ["boxMin"] = new JArray(lo), ["boxMax"] = new JArray(hi),
+                ["sectionAfter"] = after
+            };
+        }
+
+        private static JToken SetSectionBox(JObject a)
+        {
+            var items = ResolveItems(a);
+            if (items.Count == 0) throw new ArgumentException("No items found.");
+            return ApplyBox(items, (double?)a["margin"]);
+        }
+
+        // Selects the item(s), cuts a section box around them, zooms in, waits for the view to settle, saves the viewpoint,
+        // then checks whether the saved viewpoint brings the section back.
+        private static JToken SaveItemViewpoint(JObject a)
+        {
+            string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            var items = ResolveItems(a);
+            if (items.Count == 0) throw new ArgumentException("No items found.");
+            return SaveItemVp(name, items, (double?)a["margin"], (int?)a["settleMs"] ?? 1500, true, (bool?)a["restoreSection"] ?? false);
+        }
+
+        // Selects the item(s), cuts a section box around them, zooms in, waits for the view to settle, saves the viewpoint,
+        // then (when check is true) tests whether the saved viewpoint brings the section back.
+        private static JObject SaveItemVp(string name, ModelItemCollection items, double? margin, int settleMs, bool check, bool restoreSection)
+        {
+            var d = Doc;
+            string original = null; try { original = GetClipJson(); } catch { }
+            d.CurrentSelection.Clear();
+            d.CurrentSelection.CopyFrom(items);
+            var box = ApplyBox(items, margin);
+            Pump(300);
+            d.ActiveView.FocusOnCurrentSelection();
+            Pump(settleMs);
+            string tight = GetClipJson();
+            var vp = new SavedViewpoint(d.CurrentViewpoint.CreateCopy()) { DisplayName = name };
+            d.SavedViewpoints.AddCopy(vp);
+
+            bool? stored = null; string note = null;
+            if (check)
+            {
+                try
+                {
+                    if (original != null) SetClipJson(original);
+                    Pump(300);
+                    var saved = FindViewpointByName(d.SavedViewpoints.Value, name);
+                    if (saved != null)
+                    {
+                        d.SavedViewpoints.CurrentSavedViewpoint = saved;
+                        Pump(800);
+                        var now = GetClipJson();
+                        stored = JToken.DeepEquals(JToken.Parse(now), JToken.Parse(tight));
+                    }
+                }
+                catch (Exception e) { note = e.Message; }
+                if (stored == false)
+                    note = "The saved viewpoint did NOT bring back the section box. Navisworks API viewpoints may not store section boxes; a different save method is needed.";
+            }
+            if (restoreSection) { if (original != null) SetClipJson(original); }
+            return new JObject
+            {
+                ["saved"] = name, ["items"] = items.Count, ["box"] = box, ["viewpointStoresSection"] = stored == null ? null : (JToken)stored.Value, ["note"] = note, ["saveReminder"] = SaveNote()
+            };
+        }
+
+        private static JToken DeleteViewpoints(JObject a)
+        {
+            var names = (a["names"] as JArray)?.Select(x => (string)x).Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
+            string prefix = (string)a["prefix"];
+            bool dry = (bool?)a["dryRun"] ?? !string.IsNullOrEmpty(prefix); // a prefix match is previewed first unless dryRun=false
+            if (names.Count == 0 && string.IsNullOrEmpty(prefix)) throw new ArgumentException("names (exact viewpoint names) or prefix is required");
+            if (!string.IsNullOrEmpty(prefix))
+            {
+                var all = new List<SavedItem>();
+                Walk(Doc.SavedViewpoints.Value, "", (s, p) => all.Add(s));
+                foreach (var s in all) if ((s.DisplayName ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && !names.Contains(s.DisplayName)) names.Add(s.DisplayName);
+            }
+            if (dry) return new JObject { ["dryRun"] = true, ["wouldDelete"] = new JArray(names), ["note"] = "Nothing deleted. Ask the person, then call again with dryRun=false." };
+            var removed = new JArray(); var missing = new JArray();
+            foreach (var n in names)
+            {
+                var v = FindViewpointByName(Doc.SavedViewpoints.Value, n);
+                if (v == null) { missing.Add(n); continue; }
+                Doc.SavedViewpoints.Remove(v);
+                removed.Add(n);
+            }
+            return new JObject { ["removed"] = removed, ["notFound"] = missing, ["saveReminder"] = SaveNote() };
         }
 
         // ---------- properties, colours, models, reports (1.5.0) ----------

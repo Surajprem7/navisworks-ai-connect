@@ -22,6 +22,22 @@ Property conditions use the names you see in Navisworks' **Find Items** / **Prop
 | `reset_colors` | none | Removes all colour and transparency overrides. |
 | `list_models` | none | Files loaded in the project, with root name and top-level child count. |
 | `export_clash_report` | `name`, `status?` | Saves clash results as a CSV in `Documents\AI Connect\reports` (new file each time). |
+| `get_section` | none | Reads the section box/planes of the active view (JSON), the model extents and units. |
+| `set_section_box` | `source?` (`selected`/`set`/`search`), `set?`, search fields, `margin?` | Cuts a section box around the items. View only. Needs a Box section enabled once in Navisworks. |
+| `save_item_viewpoint` | `name`, `source?`, `set?`, search fields, `margin?`, `settleMs?` (1500), `restoreSection?` | Selects the item(s), cuts a section box, zooms in, saves the viewpoint, then checks the saved viewpoint brings the section back. |
+| `delete_viewpoints` | `names` (exact names) or `prefix` (previewed first), `dryRun?` | Deletes the listed saved viewpoints only. |
+| `start_hidden_scan` | `restart?`, `excludeSets?` | Starts a background scan for hidden items (small steps; Navisworks stays usable). |
+| `hidden_scan_status` | none | Progress of the background scan. |
+| `create_hidden_items_set` | `name`, `restart?`, `excludeSets?` | One call: scan, make the set of all hidden items, check the count, remind to save. Call again until `status` is `created`. |
+| `bulk_viewpoints` | `prefix?`, `sets?` or `groupCategory`+`groupProperty` (+ search/`conditions`), `perGroup?` (`first`/`all`), `maxPerCall?`, `margin?` | Many section-box viewpoints, in batches; existing names are skipped. |
+| `rename_saved_items` | `kind` (`viewpoint`/`set`), `renames?` or `find`+`replace`/`addPrefix`, `onlyPrefix?`, `dryRun?` | Renames saved viewpoints or sets. |
+| `delete_selection_sets` | `names?` or `prefix?`, `dryRun?` | Deletes sets (prefix is previewed first). |
+| `export_properties_csv` | source/search fields, `properties?`, `limit?`, `name?` | CSV of item properties in Documents\AI Connect\exports. |
+| `color_by_property` | `groupCategory`, `groupProperty`, source/search fields, `maxGroups?`, `transparency?` | Colours items by a property value and returns a legend (view only). |
+| `inspect_animation_api` | `name` | Diagnostic: what Navisworks exposes for one animation. |
+| `set_animation_duration` | `name`, `seconds` | Sets the animation length if the version allows it. |
+| `list_timeliner_tasks` | `limit?`, `maxDepth?` | Reads the Timeliner task tree (read only, experimental). |
+| `self_test` | none | Health check inside Navisworks. |
 
 Tested live: model info, search, viewpoints, selection-set and clash-test listing. Creating and running clash tests is
 implemented against the documented API but has had less field testing, so verify the first results in Clash Detective.
