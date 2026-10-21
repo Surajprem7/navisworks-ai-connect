@@ -10,7 +10,7 @@ using Newtonsoft.Json.Linq;
 namespace NavisBridge
 {
     /// <summary>All tools run on the Navisworks UI thread.</summary>
-    public static class Tools
+    public static partial class Tools
     {
         public static JToken Run(string tool, JObject a)
         {
@@ -47,7 +47,10 @@ namespace NavisBridge
                 case "set_section_box": return SetSectionBox(a);
                 case "save_item_viewpoint": return SaveItemViewpoint(a);
                 case "delete_viewpoints": return DeleteViewpoints(a);
-                default: throw new ArgumentException("Unknown tool: " + tool);
+                default:
+                    var extra = RunExtra(tool, a);
+                    if (extra != null) return extra;
+                    throw new ArgumentException("Unknown tool: " + tool);
             }
         }
 
@@ -165,7 +168,7 @@ namespace NavisBridge
             var items = FindItems(a, out var search);
             var set = new SelectionSet(search) { DisplayName = name };
             Doc.SelectionSets.AddCopy(set);
-            return new JObject { ["created"] = name, ["itemsMatched"] = items.Count };
+            return new JObject { ["created"] = name, ["itemsMatched"] = items.Count, ["saveReminder"] = SaveNote() };
         }
 
         private static SelectionSet FindSet(string name)
@@ -192,7 +195,7 @@ namespace NavisBridge
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
             var vp = new SavedViewpoint(Doc.CurrentViewpoint.CreateCopy()) { DisplayName = name };
             Doc.SavedViewpoints.AddCopy(vp);
-            return new JObject { ["saved"] = name };
+            return new JObject { ["saved"] = name, ["saveReminder"] = SaveNote() };
         }
 
         // ---------- clash ----------
@@ -568,10 +571,10 @@ namespace NavisBridge
 
         // Walks the model tree level by level (breadth-first). Big models are scanned in slices of ~30 s:
         // each call continues where the last one stopped until Done is true.
-        private class HiddenScan { public List<ModelItem> Level = new List<ModelItem>(), Next = new List<ModelItem>(), Found = new List<ModelItem>(); public int Pos, Scanned, Skipped; public bool Done; public HashSet<Guid> Exclude; }
+        private class HiddenScan { public List<ModelItem> Level = new List<ModelItem>(), Next = new List<ModelItem>(), Found = new List<ModelItem>(); public int Pos, Scanned, Skipped; public bool Done; public DateTime DoneAt; public HashSet<Guid> Exclude; }
         private static HiddenScan _scan;
 
-        private static HiddenScan ScanHidden(bool restart, bool reuseDone = false, JArray excludeSets = null)
+        private static HiddenScan ScanHidden(bool restart, bool reuseDone = false, JArray excludeSets = null, double budgetSeconds = 30)
         {
             if (reuseDone && !restart && _scan != null && _scan.Done) return _scan;
             if (restart || _scan == null || _scan.Done)
@@ -586,10 +589,10 @@ namespace NavisBridge
             {
                 if (sc.Pos >= sc.Level.Count)
                 {
-                    if (sc.Next.Count == 0) { sc.Done = true; break; }
+                    if (sc.Next.Count == 0) { sc.Done = true; sc.DoneAt = DateTime.UtcNow; break; }
                     sc.Level = sc.Next; sc.Next = new List<ModelItem>(); sc.Pos = 0;
                 }
-                if ((sc.Scanned & 127) == 0 && Expired(started, 30)) break;
+                if ((sc.Scanned & 127) == 0 && Expired(started, budgetSeconds)) break;
                 var item = sc.Level[sc.Pos++];
                 sc.Scanned++;
                 if (sc.Exclude != null && sc.Exclude.Contains(item.InstanceGuid)) { sc.Skipped++; continue; }
@@ -693,7 +696,7 @@ namespace NavisBridge
             if (items.Count == 0) throw new ArgumentException("No items found for source: " + source);
             var set = new SelectionSet(items) { DisplayName = name };
             Doc.SelectionSets.AddCopy(set);
-            return new JObject { ["created"] = name, ["source"] = source, ["items"] = items.Count };
+            return new JObject { ["created"] = name, ["source"] = source, ["items"] = items.Count, ["saveReminder"] = SaveNote() };
         }
 
 
@@ -881,47 +884,65 @@ namespace NavisBridge
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
             var items = ResolveItems(a);
             if (items.Count == 0) throw new ArgumentException("No items found.");
+            return SaveItemVp(name, items, (double?)a["margin"], (int?)a["settleMs"] ?? 1500, true, (bool?)a["restoreSection"] ?? false);
+        }
+
+        // Selects the item(s), cuts a section box around them, zooms in, waits for the view to settle, saves the viewpoint,
+        // then (when check is true) tests whether the saved viewpoint brings the section back.
+        private static JObject SaveItemVp(string name, ModelItemCollection items, double? margin, int settleMs, bool check, bool restoreSection)
+        {
             var d = Doc;
             string original = null; try { original = GetClipJson(); } catch { }
             d.CurrentSelection.Clear();
             d.CurrentSelection.CopyFrom(items);
-            var box = ApplyBox(items, (double?)a["margin"]);
+            var box = ApplyBox(items, margin);
             Pump(300);
             d.ActiveView.FocusOnCurrentSelection();
-            Pump((int?)a["settleMs"] ?? 1500);
+            Pump(settleMs);
             string tight = GetClipJson();
             var vp = new SavedViewpoint(d.CurrentViewpoint.CreateCopy()) { DisplayName = name };
             d.SavedViewpoints.AddCopy(vp);
 
-            // Self-check: put the section back to how it was, open the saved viewpoint, and see whether the box returns.
             bool? stored = null; string note = null;
-            try
+            if (check)
             {
-                if (original != null) SetClipJson(original);
-                Pump(300);
-                var saved = FindViewpointByName(d.SavedViewpoints.Value, name);
-                if (saved != null)
+                try
                 {
-                    d.SavedViewpoints.CurrentSavedViewpoint = saved;
-                    Pump(800);
-                    var now = GetClipJson();
-                    stored = JToken.DeepEquals(JToken.Parse(now), JToken.Parse(tight));
+                    if (original != null) SetClipJson(original);
+                    Pump(300);
+                    var saved = FindViewpointByName(d.SavedViewpoints.Value, name);
+                    if (saved != null)
+                    {
+                        d.SavedViewpoints.CurrentSavedViewpoint = saved;
+                        Pump(800);
+                        var now = GetClipJson();
+                        stored = JToken.DeepEquals(JToken.Parse(now), JToken.Parse(tight));
+                    }
                 }
+                catch (Exception e) { note = e.Message; }
+                if (stored == false)
+                    note = "The saved viewpoint did NOT bring back the section box. Navisworks API viewpoints may not store section boxes; a different save method is needed.";
             }
-            catch (Exception e) { note = e.Message; }
-            if (stored == false)
-                note = "The saved viewpoint did NOT bring back the section box. Navisworks API viewpoints may not store section boxes; a different save method is needed.";
-            if ((bool?)a["restoreSection"] ?? false) { if (original != null) SetClipJson(original); }
+            if (restoreSection) { if (original != null) SetClipJson(original); }
             return new JObject
             {
-                ["saved"] = name, ["items"] = items.Count, ["box"] = box, ["viewpointStoresSection"] = stored == null ? null : (JToken)stored.Value, ["note"] = note
+                ["saved"] = name, ["items"] = items.Count, ["box"] = box, ["viewpointStoresSection"] = stored == null ? null : (JToken)stored.Value, ["note"] = note, ["saveReminder"] = SaveNote()
             };
         }
 
         private static JToken DeleteViewpoints(JObject a)
         {
-            var names = (a["names"] as JArray)?.Select(x => (string)x).Where(x => !string.IsNullOrEmpty(x)).ToList();
-            if (names == null || names.Count == 0) throw new ArgumentException("names (a list of exact viewpoint names) is required");
+            var names = (a["names"] as JArray)?.Select(x => (string)x).Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();
+            string prefix = (string)a["prefix"];
+            bool dry = (bool?)a["dryRun"] ?? !string.IsNullOrEmpty(prefix); // a prefix match is previewed first unless dryRun=false
+            if (names.Count == 0 && string.IsNullOrEmpty(prefix)) throw new ArgumentException("names (exact viewpoint names) or prefix is required");
+            if (!string.IsNullOrEmpty(prefix))
+            {
+                var all = new List<SavedItem>();
+                Walk(Doc.SavedViewpoints.Value, "", (s, p) => all.Add(s));
+                foreach (var s in all) if ((s.DisplayName ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && !names.Contains(s.DisplayName)) names.Add(s.DisplayName);
+            }
+            if (dry) return new JObject { ["dryRun"] = true, ["wouldDelete"] = new JArray(names), ["note"] = "Nothing deleted. Ask the person, then call again with dryRun=false." };
             var removed = new JArray(); var missing = new JArray();
             foreach (var n in names)
             {
@@ -930,7 +951,7 @@ namespace NavisBridge
                 Doc.SavedViewpoints.Remove(v);
                 removed.Add(n);
             }
-            return new JObject { ["removed"] = removed, ["notFound"] = missing };
+            return new JObject { ["removed"] = removed, ["notFound"] = missing, ["saveReminder"] = SaveNote() };
         }
 
         // ---------- properties, colours, models, reports (1.5.0) ----------

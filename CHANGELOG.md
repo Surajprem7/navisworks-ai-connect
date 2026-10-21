@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.0
+- Hidden items: `start_hidden_scan` / `hidden_scan_status` scan in the background in small steps (Navisworks stays usable). `create_hidden_items_set` does everything in one call (scan, set, item-count check, save reminder) and finishes in the background on huge models.
+- Save reminder: tools that create sets or viewpoints now remind the person to save the file (Ctrl+S).
+- `bulk_viewpoints`: many section-box viewpoints in one go, from sets or from a property (for example one per family), in batches.
+- `rename_saved_items`, `delete_selection_sets`, `delete_viewpoints` by prefix (preview first).
+- `export_properties_csv`, `color_by_property` (with legend).
+- `set_animation_duration` and `inspect_animation_api` (works only if the Navisworks version exposes a writable duration; otherwise says so).
+- `list_timeliner_tasks` (read only, experimental).
+- `self_test`: health check inside Navisworks.
+- Includes the 1.5.1 section-box tools.
+
 ## 1.5.1
 - New: `save_item_viewpoint` makes a viewpoint that points exactly at an item: it selects it, cuts a section box around it, zooms in, waits for the view to settle, saves the viewpoint and checks that the saved viewpoint brings the section box back. `set_section_box` and `get_section` set and read the section box. `delete_viewpoints` removes viewpoints by exact name.
 - Needs a Box section to be enabled once in Navisworks (Viewpoint > Enable Sectioning > Box) so the box format can be copied.
