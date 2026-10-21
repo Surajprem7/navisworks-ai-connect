@@ -25,7 +25,7 @@ Property conditions use the names you see in Navisworks' **Find Items** / **Prop
 | `get_section` | none | Reads the section box/planes of the active view (JSON), the model extents and units. |
 | `set_section_box` | `source?` (`selected`/`set`/`search`), `set?`, search fields, `margin?` | Cuts a section box around the items. View only. Needs a Box section enabled once in Navisworks. |
 | `save_item_viewpoint` | `name`, `source?`, `set?`, search fields, `margin?`, `settleMs?` (1500), `restoreSection?` | Selects the item(s), cuts a section box, zooms in, saves the viewpoint, then checks the saved viewpoint brings the section back. |
-| `delete_viewpoints` | `names` (exact names) | Deletes the listed saved viewpoints only. |
+| `delete_viewpoints` | `names` (exact names) or `prefix` (previewed first), `dryRun?` | Deletes the listed saved viewpoints only. |
 | `start_hidden_scan` | `restart?`, `excludeSets?` | Starts a background scan for hidden items (small steps; Navisworks stays usable). |
 | `hidden_scan_status` | none | Progress of the background scan. |
 | `create_hidden_items_set` | `name`, `restart?`, `excludeSets?` | One call: scan, make the set of all hidden items, check the count, remind to save. Call again until `status` is `created`. |
