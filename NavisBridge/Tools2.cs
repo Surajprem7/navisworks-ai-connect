@@ -424,6 +424,29 @@ namespace NavisBridge
             return o;
         }
 
+        // The constructor of SavedViewpointAnimation differs between versions, so the available ones are tried by name.
+        private static SavedViewpointAnimation NewAnimation(string name, Viewpoint first)
+        {
+            var t = typeof(SavedViewpointAnimation);
+            var ctors = t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            foreach (var c in ctors)
+            {
+                var ps = c.GetParameters();
+                object[] args = null;
+                if (ps.Length == 0) args = new object[0];
+                else if (ps.Length == 1 && ps[0].ParameterType == typeof(string)) args = new object[] { name };
+                else if (ps.Length == 1 && ps[0].ParameterType == typeof(SavedViewpoint)) args = new object[] { new SavedViewpoint(first) };
+                if (args == null) continue;
+                try
+                {
+                    var an = c.Invoke(args) as SavedViewpointAnimation;
+                    if (an != null) { an.DisplayName = name; return an; }
+                }
+                catch { }
+            }
+            throw new InvalidOperationException("Could not create an animation object in this Navisworks version. Constructors found: " + string.Join("; ", ctors.Select(c => "(" + string.Join(", ", c.GetParameters().Select(p => p.ParameterType.Name)) + ")")));
+        }
+
         // Builds a saved viewpoint animation from existing viewpoints (viewpoints) or by zooming to saved sets one after the other (sets).
         private static JToken CreateAnimation(JObject a)
         {
@@ -458,7 +481,7 @@ namespace NavisBridge
             else throw new ArgumentException("Give viewpoints (names of 2 or more saved viewpoints) or sets (names of 2 or more saved sets).");
             if (frames.Count < 2) throw new ArgumentException("An animation needs at least 2 frames.");
 
-            var anim = new SavedViewpointAnimation { DisplayName = name };
+            var anim = NewAnimation(name, frames[0]);
             d.SavedViewpoints.AddCopy(anim);
             var live = FindAnim(name);
             var coll = SavedColl(true);
