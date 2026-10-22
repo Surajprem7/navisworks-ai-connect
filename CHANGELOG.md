@@ -1,6 +1,7 @@
 # Changelog
 
 ## 1.6.4
+- Easier install: the installer installs Node.js LTS automatically if it is missing (winget, else a checked download from nodejs.org), checks .NET Framework 4.8, registers the connector in Claude Desktop for the normal user, and tells you what to do if something cannot be set up.
 - Section box now follows the equipment: it is turned to the item's own angle and sized to the item's real sides (`align` item/world, `rotationDeg`). `inspect_item_geometry` shows an item's rotation.
 - Section-box viewpoints: the camera is now fitted to the item (it stayed where it was before, so the item was out of view). The result reports the camera position.
 - Section box: the box Navisworks stores has a rotation; AI Connect now resets it so the box lines up with the item.

@@ -27,6 +27,7 @@ SetupIconFile=ai-connect.ico
 [Files]
 Source: "..\mcp-server\server.js"; DestDir: "{app}\mcp-server"; Flags: ignoreversion
 Source: "..\add-to-claude-config.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "install-node.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\report-bug.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\report-bug.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
@@ -67,9 +68,6 @@ Name: "{group}\Report a bug"; Filename: "{app}\report-bug.bat"; WorkingDir: "{ap
 Name: "{group}\AI Connect on GitHub"; Filename: "https://github.com/Surajprem7/navisworks-ai-connect"
 Name: "{group}\Check for updates"; Filename: "https://github.com/Surajprem7/navisworks-ai-connect/releases/latest"
 Name: "{group}\Uninstall AI Connect"; Filename: "{uninstallexe}"
-
-[Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\add-to-claude-config.ps1"" -ServerJs ""{app}\mcp-server\server.js"" -Quiet"; Flags: runasoriginaluser runhidden; StatusMsg: "Registering AI Connect with Claude Desktop..."
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\add-to-claude-config.ps1"" -Remove -Quiet"; Flags: runhidden; RunOnceId: "RemoveClaudeEntry"
@@ -120,9 +118,16 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
-var Y: Integer;
+var Y: Integer; NetRel: Cardinal;
 begin
   Result := True;
+  // The add-in targets .NET Framework 4.8 (Release 528040). Navisworks 2022+ needs it too, so this is only a safety net.
+  if not RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full', 'Release', NetRel) or (NetRel < 528040) then
+    if MsgBox('.NET Framework 4.8 was not found. Navisworks 2022-2027 needs it.' + #13#10#13#10 + 'Install it from https://dotnet.microsoft.com/download/dotnet-framework/net48 (or Windows Update), then run this setup again.' + #13#10#13#10 + 'Continue anyway?', mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      Result := False;
+      Exit;
+    end;
   if not RegQueryStringValue(HKLM64, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{8F3A6C52-4B1E-4D7A-9C21-5E7A1B0D3F44}_is1', 'DisplayVersion', OldVersion) then
     OldVersion := '';
   if (OldVersion <> '') and (CompareVer(OldVersion, '{#AppVer}') > 0) then
@@ -209,16 +214,35 @@ begin
     end;
 end;
 
+function NodeFound(): Boolean;
+var Code: Integer;
+begin
+  Result := FileExists(ExpandConstant('{commonpf64}') + '\nodejs\node.exe') or
+            FileExists(ExpandConstant('{commonpf32}') + '\nodejs\node.exe') or
+            (Exec(ExpandConstant('{cmd}'), '/c where node >nul 2>nul', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0));
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var Code: Integer;
 begin
   if CurStep = ssPostInstall then
-    if not Exec(ExpandConstant('{cmd}'), '/c where node >nul 2>nul', '', SW_HIDE, ewWaitUntilTerminated, Code) or (Code <> 0) then
-      MsgBox('Node.js was not found. Claude needs it to run the AI Connect connector.' + #13#10#13#10 + 'Install it with:  winget install OpenJS.NodeJS.LTS' + #13#10 + 'then run the installer again (or Claude config step) so Claude can find it.', mbInformation, MB_OK);
+  begin
+    // 1) Node.js: install it automatically when it is missing (winget, else a checked download from nodejs.org)
+    if not NodeFound() then
+    begin
+      WizardForm.StatusLabel.Caption := 'Installing Node.js (needed by Claude)...';
+      Exec('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\install-node.ps1" -Quiet', '', SW_HIDE, ewWaitUntilTerminated, Code);
+    end;
+    if not NodeFound() then
+      MsgBox('Node.js could not be installed automatically (no internet or blocked).' + #13#10#13#10 + 'Claude needs it to run the AI Connect connector. Install it from https://nodejs.org (LTS) or run:  winget install OpenJS.NodeJS.LTS' + #13#10 + 'then run this installer again.', mbInformation, MB_OK);
+    // 2) Register the connector in Claude Desktop (as the normal user, not the admin account)
+    WizardForm.StatusLabel.Caption := 'Registering AI Connect with Claude Desktop...';
+    ExecAsOriginalUser('powershell.exe', '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\add-to-claude-config.ps1" -ServerJs "' + ExpandConstant('{app}') + '\mcp-server\server.js" -Quiet', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID = wpFinished then
-    WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 + 'Next: fully quit Claude (system tray > Quit) and reopen it. Then open Navisworks and click AI Connect > AI Connect on the ribbon.';
+    WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 + 'Next: fully quit Claude (system tray > Quit) and reopen it. Then open Navisworks and click AI Connect > AI Connect on the ribbon.' + #13#10#13#10 + 'No Claude Desktop yet? Get it free at claude.ai/download, open it once, then run this setup again.';
 end;
