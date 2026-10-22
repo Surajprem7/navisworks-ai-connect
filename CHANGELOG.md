@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.1
+- Section box: the box Navisworks stores has a rotation; AI Connect now resets it so the box lines up with the item.
+- `rename_saved_items` report shows the old name correctly.
+
 ## 1.6.0
 - Hidden items: `start_hidden_scan` / `hidden_scan_status` scan in the background in small steps (Navisworks stays usable). `create_hidden_items_set` does everything in one call (scan, set, item-count check, save reminder) and finishes in the background on huge models.
 - Save reminder: tools that create sets or viewpoints now remind the person to save the file (Ctrl+S).

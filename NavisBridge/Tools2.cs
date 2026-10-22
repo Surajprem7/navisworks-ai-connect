@@ -275,6 +275,7 @@ namespace NavisBridge
             }
             if (plan.Count > 300) throw new ArgumentException("More than 300 renames in one call (" + plan.Count + "). Narrow it with onlyPrefix.");
             var done = new JArray();
+            foreach (var kv in plan) done.Add(new JObject { ["from"] = kv.Key.DisplayName, ["to"] = kv.Value });
             if (!dry && plan.Count > 0)
             {
                 var coll = SavedColl(vp);
@@ -282,7 +283,6 @@ namespace NavisBridge
                 if (m == null) throw new InvalidOperationException("This Navisworks version has no EditDisplayName call, so renaming from AI Connect is not possible here.");
                 foreach (var kv in plan) m.Invoke(coll, new object[] { kv.Key, kv.Value });
             }
-            foreach (var kv in plan) done.Add(new JObject { ["from"] = kv.Key.DisplayName, ["to"] = kv.Value });
             return new JObject { ["dryRun"] = dry, ["renamed"] = dry ? 0 : plan.Count, ["plan"] = done, ["saveReminder"] = SaveNote() };
         }
 

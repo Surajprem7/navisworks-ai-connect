@@ -788,6 +788,12 @@ namespace NavisBridge
                 var pmin = Named(o, "Min"); var pmax = Named(o, "Max");
                 if (pmin != null && pmax != null && IsVec(pmin.Value) && IsVec(pmax.Value)) { SetVec(pmin.Value, min); SetVec(pmax.Value, max); return 1; }
                 foreach (var p in o.Properties().ToList()) n += PatchBox(p.Value, min, max);
+                // An oriented box is stored as corners plus a rotation. Item bounds are measured along the world axes, so the rotation must be zero.
+                if (n > 0)
+                {
+                    var rot = Named(o, "Rotation");
+                    if (rot != null && IsVec(rot.Value)) SetVec(rot.Value, new double[] { 0, 0, 0 });
+                }
             }
             else if (t is JArray a)
             {
