@@ -31,6 +31,7 @@ namespace NavisBridge
                 case "create_animation": return CreateAnimation(a);
                 case "list_timeliner_tasks": return ListTimelinerTasks(a);
                 case "self_test": return SelfTest();
+                case "inspect_item_geometry": return InspectItemGeometry(a);
                 default: return null;
             }
         }
@@ -589,6 +590,77 @@ namespace NavisBridge
             var arr = new JArray(); int count = 0; int max = Math.Max(1, Math.Min((int?)a["limit"] ?? 300, 2000));
             ReadTasks(root, 0, (int?)a["maxDepth"] ?? 6, arr, ref count, max);
             return new JObject { ["opened"] = how, ["tasks"] = arr, ["returned"] = arr.Count, ["note"] = "Read only. Experimental: depends on the Timeliner library of your Navisworks version." };
+        }
+
+        // ---------- item orientation (diagnostic) ----------
+
+        private static object ReadMember(object o, string name)
+        {
+            if (o == null) return null;
+            var f = BindingFlags.Public | BindingFlags.Instance;
+            try
+            {
+                var p = o.GetType().GetProperty(name, f);
+                if (p != null && p.GetIndexParameters().Length == 0) return p.GetValue(o, null);
+                var m = o.GetType().GetMethod(name, f, null, Type.EmptyTypes, null);
+                if (m != null) return m.Invoke(o, null);
+            }
+            catch { }
+            return null;
+        }
+
+        private static JToken Dump(object o, int depth)
+        {
+            if (o == null) return null;
+            var t = o.GetType();
+            if (t.IsPrimitive || o is string || o is decimal || o is Enum) return JToken.FromObject(Convert.ToString(o, System.Globalization.CultureInfo.InvariantCulture));
+            var j = new JObject();
+            j["_type"] = t.Name;
+            foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (p.GetIndexParameters().Length > 0) continue;
+                try
+                {
+                    var v = p.GetValue(o, null);
+                    if (v == null) { j[p.Name] = null; continue; }
+                    var vt = v.GetType();
+                    if (vt.IsPrimitive || v is string || v is Enum) j[p.Name] = Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture);
+                    else if (depth > 0 && (vt.Namespace ?? "").StartsWith("Autodesk.Navisworks") && !typeof(System.Collections.IEnumerable).IsAssignableFrom(vt)) j[p.Name] = Dump(v, depth - 1);
+                    else j[p.Name] = vt.Name;
+                }
+                catch { j[p.Name] = "(unreadable)"; }
+            }
+            return j;
+        }
+
+        // Shows what Navisworks knows about the item's own geometry and rotation: lets us see whether an oriented box can be built.
+        private static JToken InspectItemGeometry(JObject a)
+        {
+            var items = ResolveItems(a);
+            if (items.Count == 0) throw new ArgumentException("No items found.");
+            var it = items[0];
+            var res = new JObject { ["item"] = it.DisplayName, ["class"] = it.ClassDisplayName, ["hasGeometry"] = it.HasGeometry };
+            var nodes = new JArray();
+            int shown = 0;
+            foreach (var d in it.DescendantsAndSelf)
+            {
+                if (!d.HasGeometry) continue;
+                if (shown++ >= 4) break;
+                var g = ReadMember(d, "Geometry");
+                var n = new JObject { ["name"] = d.DisplayName, ["class"] = d.ClassDisplayName };
+                n["bbox"] = Dump(d.BoundingBox(), 1);
+                n["geometry"] = Dump(g, 2);
+                var tr = ReadMember(g, "ActiveTransform");
+                if (tr != null)
+                {
+                    var fm = tr.GetType().GetMethod("Factor", Type.EmptyTypes);
+                    if (fm != null) { try { n["transformFactored"] = Dump(fm.Invoke(tr, null), 2); } catch (Exception e) { n["transformFactored"] = e.Message; } }
+                }
+                nodes.Add(n);
+            }
+            res["geometryNodes"] = nodes;
+            res["modelItemMembers"] = new JArray(typeof(ModelItem).GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => (JToken)p.Name));
+            return res;
         }
 
         // ---------- self test ----------

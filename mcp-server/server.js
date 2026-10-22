@@ -5,7 +5,7 @@
 const BRIDGE = process.env.NAVIS_BRIDGE_URL || 'http://127.0.0.1:47800/';
 const fs = require('fs');
 const path = require('path');
-const VERSION = '1.6.2';
+const VERSION = '1.6.3';
 
 // Shared secret: NAVIS_BRIDGE_TOKEN if set, otherwise the file the Navisworks plugin creates in the user's profile.
 function readToken() {
@@ -78,6 +78,7 @@ const TOOLS = [
   { name: 'create_animation', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Create a saved viewpoint animation. Give viewpoints (names of 2 or more saved viewpoints, used as frames in that order) OR sets (names of 2 or more saved sets: the camera zooms to each set and the view is captured as a frame). The current view is restored afterwards.', inputSchema: { type: 'object', properties: { name: str('Animation name'), viewpoints: { type: 'array', items: { type: 'string' }, description: 'Saved viewpoint names, in order' }, sets: { type: 'array', items: { type: 'string' }, description: 'Saved set names, in order' }, settleMs: num('Wait after each zoom (default 1500)') }, required: ['name'] } },
   { name: 'set_animation_duration', annotations: { readOnlyHint: false, destructiveHint: false }, description: 'Set the total length of a viewpoint animation in seconds (a longer length plays slower). Works only if this Navisworks version exposes a writable duration; otherwise says so.', inputSchema: { type: 'object', properties: { name: str('Animation name'), seconds: num('New total length in seconds') }, required: ['name', 'seconds'] } },
   { name: 'list_timeliner_tasks', annotations: { readOnlyHint: true }, description: 'Read the Timeliner task tree (names, planned and actual dates). Read only and experimental: depends on the Timeliner library of the installed Navisworks.', inputSchema: { type: 'object', properties: { limit: num('Max tasks (default 300)'), maxDepth: num('Tree depth (default 6)') } } },
+  { name: 'inspect_item_geometry', annotations: { readOnlyHint: true }, description: 'Diagnostic: shows what Navisworks knows about an item\'s own geometry and rotation (to see whether an oriented section box can be built). Uses the first matching item.', inputSchema: { type: 'object', properties: { source: { type: 'string', enum: ['selected', 'set', 'search'] }, set: str('Set name when source is set'), ...searchProps, conditions: conditionsProp } } },
   { name: 'self_test', annotations: { readOnlyHint: true }, description: 'Run a quick health check of AI Connect inside Navisworks: version, document, section box calls, rename/delete calls, animation and Timeliner support. Changes nothing.', inputSchema: { type: 'object', properties: {} } },
 ];
 

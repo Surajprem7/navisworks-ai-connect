@@ -5,7 +5,7 @@
                x:Uid="RibbonControl_Claude">
   <RibbonTab Id="ID_ClaudeTab" Title="AI Connect" KeyTip="Z" x:Uid="RibbonTab_Claude">
     <RibbonPanel x:Uid="RibbonPanel_Claude">
-      <RibbonPanelSource Title="AI Connect v1.6.2" KeyTip="L" x:Uid="RibbonPanelSource_Claude">
+      <RibbonPanelSource Title="AI Connect v1.6.3" KeyTip="L" x:Uid="RibbonPanelSource_Claude">
         <nw:NWRibbonButton Id="ID_ClaudeLink_Toggle" Size="Large" KeyTip="C" x:Uid="RibbonButton_Claude" />
       </RibbonPanelSource>
     </RibbonPanel>
