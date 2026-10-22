@@ -35,6 +35,7 @@ Property conditions use the names you see in Navisworks' **Find Items** / **Prop
 | `export_properties_csv` | source/search fields, `properties?`, `limit?`, `name?` | CSV of item properties in Documents\AI Connect\exports. |
 | `color_by_property` | `groupCategory`, `groupProperty`, source/search fields, `maxGroups?`, `transparency?` | Colours items by a property value and returns a legend (view only). |
 | `inspect_animation_api` | `name` | Diagnostic: what Navisworks exposes for one animation. |
+| `create_animation` | `name`, `viewpoints?` or `sets?`, `settleMs?` | Creates a viewpoint animation from 2+ saved viewpoints, or by zooming to 2+ saved sets. |
 | `set_animation_duration` | `name`, `seconds` | Sets the animation length if the version allows it. |
 | `list_timeliner_tasks` | `limit?`, `maxDepth?` | Reads the Timeliner task tree (read only, experimental). |
 | `self_test` | none | Health check inside Navisworks. |

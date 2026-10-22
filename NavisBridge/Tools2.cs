@@ -28,6 +28,7 @@ namespace NavisBridge
                 case "color_by_property": return ColorByProperty(a);
                 case "inspect_animation_api": return InspectAnimationApi(a);
                 case "set_animation_duration": return SetAnimationDuration(a);
+                case "create_animation": return CreateAnimation(a);
                 case "list_timeliner_tasks": return ListTimelinerTasks(a);
                 case "self_test": return SelfTest();
                 default: return null;
@@ -421,6 +422,53 @@ namespace NavisBridge
             o["methods"] = new JArray(m);
             o["collectionMethods"] = new JArray(Doc.SavedViewpoints.GetType().GetMethods(BindingFlags.Public | BindingFlags.Instance).Where(x => !x.IsSpecialName).Select(x => (JToken)x.Name).Distinct().ToList());
             return o;
+        }
+
+        // Builds a saved viewpoint animation from existing viewpoints (viewpoints) or by zooming to saved sets one after the other (sets).
+        private static JToken CreateAnimation(JObject a)
+        {
+            string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            if (FindViewpointByName(Doc.SavedViewpoints.Value, name) != null) throw new ArgumentException("A viewpoint or animation named '" + name + "' already exists. Use another name.");
+            var d = Doc;
+            var frames = new List<Viewpoint>();
+            Viewpoint original = null; try { original = d.CurrentViewpoint.CreateCopy(); } catch { }
+            if (a["viewpoints"] is JArray vps && vps.Count > 0)
+            {
+                foreach (var n in vps)
+                {
+                    var v = FindViewpointByName(d.SavedViewpoints.Value, (string)n) ?? throw new ArgumentException("Viewpoint not found: " + (string)n);
+                    frames.Add(v.Viewpoint.CreateCopy());
+                }
+            }
+            else if (a["sets"] is JArray sets && sets.Count > 0)
+            {
+                int settle = (int?)a["settleMs"] ?? 1500;
+                foreach (var n in sets)
+                {
+                    var col = new ModelItemCollection();
+                    col.CopyFrom(FindSet((string)n).GetSelectedItems(d));
+                    d.CurrentSelection.Clear();
+                    d.CurrentSelection.CopyFrom(col);
+                    d.ActiveView.FocusOnCurrentSelection();
+                    Pump(settle);
+                    frames.Add(d.CurrentViewpoint.CreateCopy());
+                }
+                d.CurrentSelection.Clear();
+            }
+            else throw new ArgumentException("Give viewpoints (names of 2 or more saved viewpoints) or sets (names of 2 or more saved sets).");
+            if (frames.Count < 2) throw new ArgumentException("An animation needs at least 2 frames.");
+
+            var anim = new SavedViewpointAnimation { DisplayName = name };
+            d.SavedViewpoints.AddCopy(anim);
+            var live = FindAnim(name);
+            var coll = SavedColl(true);
+            var ins = FindMethod(coll, "InsertCopy", 3);
+            if (ins == null) throw new InvalidOperationException("This Navisworks version has no InsertCopy call, so frames cannot be added to an animation from AI Connect.");
+            for (int i = 0; i < frames.Count; i++)
+                ins.Invoke(coll, new object[] { live, i, new SavedViewpoint(frames[i]) { DisplayName = name + " " + (i + 1) } });
+            if (original != null) { try { d.CurrentViewpoint.CopyFrom(original); } catch { } }
+            int count = 0; try { foreach (SavedItem ch in FindAnim(name).Children) if (ch is SavedViewpoint) count++; } catch { }
+            return new JObject { ["created"] = name, ["framesRequested"] = frames.Count, ["framesInAnimation"] = count, ["saveReminder"] = SaveNote() };
         }
 
         private static JToken SetAnimationDuration(JObject a)

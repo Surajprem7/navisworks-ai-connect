@@ -2,6 +2,7 @@
 
 ## 1.6.1
 - Section box: the box Navisworks stores has a rotation; AI Connect now resets it so the box lines up with the item.
+- New: `create_animation` (from saved viewpoints or saved sets).
 - `rename_saved_items` report shows the old name correctly.
 
 ## 1.6.0
