@@ -209,7 +209,7 @@ namespace NavisBridge
                 if (!perAll) { use = new ModelItemCollection(); use.Add(g.Value[0]); }
                 try
                 {
-                    var r = SaveItemVp(vpName, use, margin, settle, made.Count == 0 && ((bool?)a["check"] ?? true), false);
+                    var r = SaveItemVp(vpName, use, margin, settle, made.Count == 0 && ((bool?)a["check"] ?? true), false, (string)a["align"] ?? "item", (double?)a["rotationDeg"]);
                     if (made.Count == 0) firstCheck = r["viewpointStoresSection"];
                     made.Add(vpName);
                 }

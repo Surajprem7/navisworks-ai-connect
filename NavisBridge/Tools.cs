@@ -706,6 +706,7 @@ namespace NavisBridge
         // reports what it found so a different JSON layout can be diagnosed instead of guessed.
 
         private static string _clipTemplate;
+        private static double _patchYaw; // rotation (degrees, about the vertical axis) written into the section box
 
         private static object ViewCall(string method, params object[] args)
         {
@@ -792,7 +793,7 @@ namespace NavisBridge
                 if (n > 0)
                 {
                     var rot = Named(o, "Rotation");
-                    if (rot != null && IsVec(rot.Value)) SetVec(rot.Value, new double[] { 0, 0, 0 });
+                    if (rot != null && IsVec(rot.Value)) SetVec(rot.Value, new double[] { 0, 0, _patchYaw });
                 }
             }
             else if (t is JArray a)
@@ -841,14 +842,75 @@ namespace NavisBridge
             return o;
         }
 
-        // Puts a section box around the items. Returns what happened so problems can be diagnosed.
-        private static JObject ApplyBox(ModelItemCollection items, double? margin)
+        // Rotation of the item itself about the vertical axis, in degrees (-90..90], read from the transform of its geometry.
+        private static bool ItemYaw(ModelItem it, out double yawDeg)
+        {
+            yawDeg = 0;
+            try
+            {
+                foreach (var d in it.DescendantsAndSelf)
+                {
+                    if (!d.HasGeometry) continue;
+                    var r = d.Geometry.ActiveTransform.Factor().Rotation;
+                    double x = r.A, y = r.B, z = r.C, w = r.D;
+                    if (Math.Abs(x) > 0.05 || Math.Abs(y) > 0.05) return false; // tilted, not just turned
+                    double yaw = Math.Atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)) * 180.0 / Math.PI;
+                    while (yaw > 90) yaw -= 180;
+                    while (yaw <= -90) yaw += 180;
+                    yawDeg = yaw;
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        // Puts a section box around the items, turned to the same angle as the item (align "item"), or straight along the world axes (align "world").
+        private static JObject ApplyBox(ModelItemCollection items, double? margin, string align = "item", double? yawOverride = null)
         {
             double[] min = new double[3], max = new double[3];
             if (!BoxOfItems(items, min, max)) throw new ArgumentException("Could not measure these items (no geometry bounding box).");
-            double size = Math.Max(max[0] - min[0], Math.Max(max[1] - min[1], max[2] - min[2]));
+            double cx = (min[0] + max[0]) / 2, cy = (min[1] + max[1]) / 2, cz = (min[2] + max[2]) / 2;
+            double W = max[0] - min[0], H = max[1] - min[1], Z = max[2] - min[2];
+            double yaw = 0; string how = "world axes";
+            bool useYaw = false;
+            if (yawOverride.HasValue) { yaw = yawOverride.Value; useYaw = true; how = "given angle"; }
+            else if (!string.Equals(align, "world", StringComparison.OrdinalIgnoreCase) && items.Count > 0 && ItemYaw(items[0], out yaw)) { useYaw = true; how = "item rotation"; }
+            double hu = W / 2, hv = H / 2;
+            if (useYaw && Math.Abs(yaw) > 0.01)
+            {
+                double rad = yaw * Math.PI / 180.0, c = Math.Cos(rad), sn = Math.Sin(rad);
+                double ac = Math.Abs(c), asn = Math.Abs(sn), den = ac * ac - asn * asn;
+                bool done = false;
+                if (items.Count == 1 && Math.Abs(den) > 0.15)
+                {
+                    // the world box of a turned rectangle is W = a*|cos| + b*|sin|, H = a*|sin| + b*|cos|: solve for its own sides a and b
+                    double a2 = (W * ac - H * asn) / den, b2 = (H * ac - W * asn) / den;
+                    if (a2 > 1e-6 && b2 > 1e-6) { hu = a2 / 2; hv = b2 / 2; done = true; }
+                }
+                if (!done)
+                {
+                    // several items (or a square-on-diagonal case): enclose every corner in the turned frame
+                    double u0 = double.MaxValue, u1 = double.MinValue, v0 = double.MaxValue, v1 = double.MinValue;
+                    foreach (var it in items)
+                    {
+                        double[] bmn = new double[3], bmx = new double[3];
+                        if (!BoxOf(it, bmn, bmx)) continue;
+                        foreach (var px in new[] { bmn[0], bmx[0] })
+                            foreach (var py in new[] { bmn[1], bmx[1] })
+                            {
+                                double u = (px - cx) * c + (py - cy) * sn, v = -(px - cx) * sn + (py - cy) * c;
+                                u0 = Math.Min(u0, u); u1 = Math.Max(u1, u); v0 = Math.Min(v0, v); v1 = Math.Max(v1, v);
+                            }
+                    }
+                    if (u1 > u0 && v1 > v0) { hu = (u1 - u0) / 2; hv = (v1 - v0) / 2; }
+                }
+            }
+            else { yaw = 0; if (useYaw) how = "item rotation (none)"; }
+            double size = Math.Max(2 * hu, Math.Max(2 * hv, Z));
             double m = margin ?? Math.Max(size * 0.15, 1e-6);
-            double[] lo = { min[0] - m, min[1] - m, min[2] - m }, hi = { max[0] + m, max[1] + m, max[2] + m };
+            double[] lo = { cx - hu - m, cy - hv - m, cz - Z / 2 - m }, hi = { cx + hu + m, cy + hv + m, cz + Z / 2 + m };
+            _patchYaw = yaw;
 
             string current = GetClipJson();
             JToken tok = null;
@@ -871,6 +933,7 @@ namespace NavisBridge
             {
                 ["applied"] = ok, ["changed"] = changed, ["boxesPatched"] = patched,
                 ["units"] = Doc.Units.ToString(),
+                ["alignedTo"] = how, ["rotationDegrees"] = yaw,
                 ["boxMin"] = new JArray(lo), ["boxMax"] = new JArray(hi),
                 ["sectionAfter"] = after
             };
@@ -880,7 +943,7 @@ namespace NavisBridge
         {
             var items = ResolveItems(a);
             if (items.Count == 0) throw new ArgumentException("No items found.");
-            return ApplyBox(items, (double?)a["margin"]);
+            return ApplyBox(items, (double?)a["margin"], (string)a["align"] ?? "item", (double?)a["rotationDeg"]);
         }
 
         // Selects the item(s), cuts a section box around them, zooms in, waits for the view to settle, saves the viewpoint,
@@ -890,18 +953,18 @@ namespace NavisBridge
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
             var items = ResolveItems(a);
             if (items.Count == 0) throw new ArgumentException("No items found.");
-            return SaveItemVp(name, items, (double?)a["margin"], (int?)a["settleMs"] ?? 1500, true, (bool?)a["restoreSection"] ?? false);
+            return SaveItemVp(name, items, (double?)a["margin"], (int?)a["settleMs"] ?? 1500, true, (bool?)a["restoreSection"] ?? false, (string)a["align"] ?? "item", (double?)a["rotationDeg"]);
         }
 
         // Selects the item(s), cuts a section box around them, zooms in, waits for the view to settle, saves the viewpoint,
         // then (when check is true) tests whether the saved viewpoint brings the section back.
-        private static JObject SaveItemVp(string name, ModelItemCollection items, double? margin, int settleMs, bool check, bool restoreSection)
+        private static JObject SaveItemVp(string name, ModelItemCollection items, double? margin, int settleMs, bool check, bool restoreSection, string align = "item", double? yawOverride = null)
         {
             var d = Doc;
             string original = null; try { original = GetClipJson(); } catch { }
             d.CurrentSelection.Clear();
             d.CurrentSelection.CopyFrom(items);
-            var box = ApplyBox(items, margin);
+            var box = ApplyBox(items, margin, align, yawOverride);
             Pump(300);
             d.ActiveView.FocusOnCurrentSelection();
             Pump(settleMs);
