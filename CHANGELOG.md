@@ -1,6 +1,7 @@
 # Changelog
 
 ## 1.6.4
+- Section box now follows the equipment: it is turned to the item's own angle and sized to the item's real sides (`align` item/world, `rotationDeg`). `inspect_item_geometry` shows an item's rotation.
 - Section-box viewpoints: the camera is now fitted to the item (it stayed where it was before, so the item was out of view). The result reports the camera position.
 - Section box: the box Navisworks stores has a rotation; AI Connect now resets it so the box lines up with the item.
 - New: `create_animation` (from saved viewpoints or saved sets).
