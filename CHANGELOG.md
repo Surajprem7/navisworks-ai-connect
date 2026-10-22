@@ -1,6 +1,7 @@
 # Changelog
 
-## 1.6.1
+## 1.6.2
+- Section-box viewpoints: the camera is now fitted to the item (it stayed where it was before, so the item was out of view). The result reports the camera position.
 - Section box: the box Navisworks stores has a rotation; AI Connect now resets it so the box lines up with the item.
 - New: `create_animation` (from saved viewpoints or saved sets).
 - `rename_saved_items` report shows the old name correctly.

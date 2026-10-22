@@ -906,8 +906,10 @@ namespace NavisBridge
             d.ActiveView.FocusOnCurrentSelection();
             Pump(settleMs);
             // Focus can leave the camera where it was; fit the camera to the measured box as well.
+            Point3D camBefore = null, camAfter = null; double distAfter = -1; string zoomNote = null;
             try
             {
+                camBefore = d.CurrentViewpoint.Value.Position;
                 double[] bmin = new double[3], bmax = new double[3];
                 if (BoxOfItems(items, bmin, bmax))
                 {
@@ -915,9 +917,12 @@ namespace NavisBridge
                     cur.ZoomBox(new BoundingBox3D(new Point3D(bmin[0], bmin[1], bmin[2]), new Point3D(bmax[0], bmax[1], bmax[2])));
                     d.CurrentViewpoint.CopyFrom(cur);
                     Pump(600);
+                    camAfter = d.CurrentViewpoint.Value.Position;
+                    double cx = (bmin[0] + bmax[0]) / 2, cy = (bmin[1] + bmax[1]) / 2, cz = (bmin[2] + bmax[2]) / 2;
+                    distAfter = Math.Sqrt((camAfter.X - cx) * (camAfter.X - cx) + (camAfter.Y - cy) * (camAfter.Y - cy) + (camAfter.Z - cz) * (camAfter.Z - cz));
                 }
             }
-            catch { }
+            catch (Exception ze) { zoomNote = ze.Message; }
             string tight = GetClipJson();
             var vp = new SavedViewpoint(d.CurrentViewpoint.CreateCopy()) { DisplayName = name };
             d.SavedViewpoints.AddCopy(vp);
@@ -945,7 +950,14 @@ namespace NavisBridge
             if (restoreSection) { if (original != null) SetClipJson(original); }
             return new JObject
             {
-                ["saved"] = name, ["items"] = items.Count, ["box"] = box, ["viewpointStoresSection"] = stored == null ? null : (JToken)stored.Value, ["note"] = note, ["saveReminder"] = SaveNote()
+                ["saved"] = name, ["items"] = items.Count, ["box"] = box, ["viewpointStoresSection"] = stored == null ? null : (JToken)stored.Value, ["note"] = note, ["saveReminder"] = SaveNote(),
+                ["camera"] = new JObject
+                {
+                    ["before"] = camBefore == null ? null : new JArray(Math.Round(camBefore.X, 2), Math.Round(camBefore.Y, 2), Math.Round(camBefore.Z, 2)),
+                    ["after"] = camAfter == null ? null : new JArray(Math.Round(camAfter.X, 2), Math.Round(camAfter.Y, 2), Math.Round(camAfter.Z, 2)),
+                    ["distanceToItemCentre"] = distAfter < 0 ? null : (JToken)Math.Round(distAfter, 2),
+                    ["zoomError"] = zoomNote
+                }
             };
         }
 
