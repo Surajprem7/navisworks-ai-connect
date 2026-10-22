@@ -905,6 +905,19 @@ namespace NavisBridge
             Pump(300);
             d.ActiveView.FocusOnCurrentSelection();
             Pump(settleMs);
+            // Focus can leave the camera where it was; fit the camera to the measured box as well.
+            try
+            {
+                double[] bmin = new double[3], bmax = new double[3];
+                if (BoxOfItems(items, bmin, bmax))
+                {
+                    var cur = d.CurrentViewpoint.CreateCopy();
+                    cur.ZoomBox(new BoundingBox3D(new Point3D(bmin[0], bmin[1], bmin[2]), new Point3D(bmax[0], bmax[1], bmax[2])));
+                    d.CurrentViewpoint.CopyFrom(cur);
+                    Pump(600);
+                }
+            }
+            catch { }
             string tight = GetClipJson();
             var vp = new SavedViewpoint(d.CurrentViewpoint.CreateCopy()) { DisplayName = name };
             d.SavedViewpoints.AddCopy(vp);
