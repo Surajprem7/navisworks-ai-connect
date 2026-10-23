@@ -119,8 +119,7 @@ namespace NavisBridge
             else if (a["direction"] != null) dir = Vec3(a["direction"], "direction");
             else throw new ArgumentException("Give lookAt [x, y, z] or direction [x, y, z].");
             string save = (string)a["save"];
-            if (!string.IsNullOrWhiteSpace(save) && FindViewpointByName(Doc.SavedViewpoints.Value, save) != null)
-                throw new ArgumentException("A viewpoint named '" + save + "' already exists. Use another name.");
+            if (!string.IsNullOrWhiteSpace(save)) RequireNewViewpointName(save);
             var vp = MakeCamera(pos, dir);
             Doc.CurrentViewpoint.CopyFrom(vp);
             Pump(300);
@@ -145,7 +144,7 @@ namespace NavisBridge
         private static JToken CreateWalkthrough(JObject a)
         {
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
-            if (FindViewpointByName(Doc.SavedViewpoints.Value, name) != null) throw new ArgumentException("A viewpoint or animation named '" + name + "' already exists. Use another name.");
+            RequireNewViewpointName(name);
             double upm = UnitsPerMetre();
             double eye = ((double?)a["eyeHeightM"] ?? 1.65) * upm;
             double appr = ((double?)a["approachM"] ?? 2.5) * upm;
@@ -155,6 +154,8 @@ namespace NavisBridge
             string order = ((string)a["order"] ?? "nearest").ToLowerInvariant();
             var stops = new List<Stop>();
             var doorsReport = new JArray();
+            var levelsReport = new JArray();
+            int skippedOtherLevels = 0;
 
             if (a["waypoints"] is JArray wps && wps.Count > 0)
             {
@@ -208,6 +209,20 @@ namespace NavisBridge
                     doors.Add(new Stop { Pos = new[] { cx, cy, lo[2] + eye }, Dir = new[] { nx, ny, 0.0 }, Label = it.DisplayName + " " + (PropValue(it, "Item", "GUID") ?? "") });
                 }
                 if (doors.Count == 0) throw new ArgumentException("The doors found have no geometry to measure.");
+
+                // Doors are grouped by floor level (height of the sill). A straight walk from one floor to another would go through the slab,
+                // so by default only the floor with the most doors is walked ("level": "all" keeps every floor).
+                double tol = Math.Max(0.3, (double?)a["levelToleranceM"] ?? 1.5) * upm;
+                string levelMode = ((string)a["level"] ?? "largest").ToLowerInvariant();
+                var groups = doors.GroupBy(d => (long)Math.Round((d.Pos[2] - eye) / tol)).OrderBy(g => g.Key).ToList();
+                foreach (var g in groups)
+                    levelsReport.Add(new JObject { ["sillHeightM"] = R3(g.Average(d => d.Pos[2] - eye) / upm), ["doors"] = g.Count() });
+                if (levelMode != "all" && groups.Count > 1)
+                {
+                    var keep = groups.OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
+                    skippedOtherLevels = doors.Count - keep.Count();
+                    doors = keep.ToList();
+                }
                 if (order == "nearest")
                 {
                     var rest = new List<Stop>(doors); var sorted = new List<Stop>();
@@ -272,7 +287,8 @@ namespace NavisBridge
                 ["created"] = name, ["units"] = d0.Units.ToString(),
                 ["framesRequested"] = frames.Count, ["framesInAnimation"] = count,
                 ["pauses"] = pauseReport,
-                ["doors"] = doorsReport, ["sectionBoxSwitchedOff"] = sectionOff,
+                ["doors"] = doorsReport, ["floorLevelsFound"] = levelsReport, ["doorsSkippedOnOtherFloors"] = skippedOtherLevels,
+                ["sectionBoxSwitchedOff"] = sectionOff,
                 ["firstWalkFrame"] = first,
                 ["note"] = "Between stops the camera moves in a straight line, so it can pass through walls where there is no door. Add waypoints for corridors and turns. The length of the animation is set by Navisworks (more frames = longer).",
                 ["saveReminder"] = SaveNote()

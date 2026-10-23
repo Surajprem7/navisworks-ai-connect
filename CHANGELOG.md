@@ -6,6 +6,14 @@
 - New: `delete_animations` deletes animations by exact name (dry run first).
 - `create_walkthrough` has `pauseInsideSeconds` to pause once inside each door.
 - `self_test` now checks the pause and smoothing calls and no longer says "viewpoint replace NO" by mistake.
+- `create_walkthrough` walks one floor at a time (`level`, `levelToleranceM`): a straight line between floors would go through the slab. The reply lists the floors found.
+- Audit fixes:
+  - Saving a set, viewpoint or animation under a name that is already used is now refused with a clear message (before, it made a duplicate and `save_item_viewpoint` could check the wrong one).
+  - An animation is listed as one item. `delete_viewpoints` (prefix) and `rename_saved_items` no longer touch the frames inside an animation.
+  - CSV files: a cell that starts with = + @ (or a minus that is not a number) is marked as text, so Excel cannot run it as a formula.
+  - Two requests that arrive together can no longer mix: the bridge finishes one before it starts the next (some tools wait for the view to settle).
+  - The token is compared in constant time and requests over 4 MB are refused.
+  - If something else answers on port 47800, the error now says so.
 
 ## 1.7.0
 - New: `set_camera` puts the camera at an exact point and aims it, and returns where it ended up.

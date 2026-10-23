@@ -150,9 +150,34 @@ namespace NavisBridge
         {
             foreach (SavedItem s in c)
             {
-                if (s.IsGroup) Walk(((GroupItem)s).Children, path + s.DisplayName + "/", f);
+                // An animation counts as one item: its frames belong to it and must not be listed, renamed or deleted on their own.
+                if (s is SavedViewpointAnimation) f(s, path);
+                else if (s.IsGroup) Walk(((GroupItem)s).Children, path + s.DisplayName + "/", f);
                 else f(s, path);
             }
+        }
+
+        // True when any saved item (set, viewpoint, animation or folder) already has this name.
+        private static bool AnySavedNamed(SavedItemCollection c, string name)
+        {
+            foreach (SavedItem s in c)
+            {
+                if (string.Equals(s.DisplayName, name, StringComparison.OrdinalIgnoreCase)) return true;
+                if (s is GroupItem g && AnySavedNamed(g.Children, name)) return true;
+            }
+            return false;
+        }
+
+        private static void RequireNewViewpointName(string name)
+        {
+            if (AnySavedNamed(Doc.SavedViewpoints.Value, name))
+                throw new ArgumentException("A saved viewpoint, animation or folder named '" + name + "' already exists. Use another name.");
+        }
+
+        private static void RequireNewSetName(string name)
+        {
+            if (AnySavedNamed(Doc.SelectionSets.Value, name))
+                throw new ArgumentException("A selection set or folder named '" + name + "' already exists. Use another name, or remove the old one first with delete_selection_sets.");
         }
 
         private static JToken ListSelectionSets()
@@ -165,6 +190,7 @@ namespace NavisBridge
         private static JToken CreateSelectionSet(JObject a)
         {
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            RequireNewSetName(name);
             var items = FindItems(a, out var search);
             var set = new SelectionSet(search) { DisplayName = name };
             Doc.SelectionSets.AddCopy(set);
@@ -193,6 +219,7 @@ namespace NavisBridge
         private static JToken SaveViewpoint(JObject a)
         {
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            RequireNewViewpointName(name);
             var vp = new SavedViewpoint(Doc.CurrentViewpoint.CreateCopy()) { DisplayName = name };
             Doc.SavedViewpoints.AddCopy(vp);
             return new JObject { ["saved"] = name, ["saveReminder"] = SaveNote() };
@@ -673,6 +700,7 @@ namespace NavisBridge
         private static JToken CreateSetFromItems(JObject a)
         {
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            RequireNewSetName(name);
             string source = ((string)a["source"] ?? "").ToLowerInvariant();
             var items = new ModelItemCollection();
             if (source == "hidden")
@@ -951,6 +979,7 @@ namespace NavisBridge
         private static JToken SaveItemViewpoint(JObject a)
         {
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            RequireNewViewpointName(name);
             var items = ResolveItems(a);
             if (items.Count == 0) throw new ArgumentException("No items found.");
             return SaveItemVp(name, items, (double?)a["margin"], (int?)a["settleMs"] ?? 1500, true, (bool?)a["restoreSection"] ?? false, (string)a["align"] ?? "item", (double?)a["rotationDeg"]);
@@ -961,6 +990,9 @@ namespace NavisBridge
         private static JObject SaveItemVp(string name, ModelItemCollection items, double? margin, int settleMs, bool check, bool restoreSection, string align = "item", double? yawOverride = null)
         {
             var d = Doc;
+            // With a name that is already used, the check below would read the old viewpoint and report the wrong thing, so it is skipped.
+            bool nameUsed = AnySavedNamed(d.SavedViewpoints.Value, name);
+            if (nameUsed) check = false;
             string original = null; try { original = GetClipJson(); } catch { }
             d.CurrentSelection.Clear();
             d.CurrentSelection.CopyFrom(items);
@@ -1034,7 +1066,7 @@ namespace NavisBridge
             {
                 var all = new List<SavedItem>();
                 Walk(Doc.SavedViewpoints.Value, "", (s, p) => all.Add(s));
-                foreach (var s in all) if ((s.DisplayName ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && !names.Contains(s.DisplayName)) names.Add(s.DisplayName);
+                foreach (var s in all) if (s is SavedViewpoint && (s.DisplayName ?? "").StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && !names.Contains(s.DisplayName)) names.Add(s.DisplayName); // animations are removed with delete_animations
             }
             if (dry) return new JObject { ["dryRun"] = true, ["wouldDelete"] = new JArray(names), ["note"] = "Nothing deleted. Ask the person, then call again with dryRun=false." };
             var removed = new JArray(); var missing = new JArray();
@@ -1135,6 +1167,15 @@ namespace NavisBridge
         private static string Csv(string v)
         {
             if (v == null) return "";
+            // A cell that starts with = + - @ can be run as a formula when the file is opened in Excel (names come from the model), so it is marked as text.
+            // Plain negative numbers are left alone.
+            if (v.Length > 0)
+            {
+                char c0 = v[0]; double num;
+                bool formulaLike = c0 == '=' || c0 == '+' || c0 == '@' || c0 == '\t' || c0 == '\r' ||
+                    (c0 == '-' && !double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out num));
+                if (formulaLike) v = "'" + v;
+            }
             if (v.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0) return "\"" + v.Replace("\"", "\"\"") + "\"";
             return v;
         }

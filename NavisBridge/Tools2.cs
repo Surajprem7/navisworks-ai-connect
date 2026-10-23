@@ -127,6 +127,7 @@ namespace NavisBridge
         private static JToken CreateHiddenItemsSet(JObject a)
         {
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
+            RequireNewSetName(name);
             bool restart = (bool?)a["restart"] ?? false;
             if (_scan != null && _scan.Done && (DateTime.UtcNow - _scan.DoneAt).TotalMinutes > 10) restart = true; // old result: model may have changed
             if (restart || _scan == null) ScanHidden(true, false, a["excludeSets"] as JArray, 25);
@@ -452,7 +453,7 @@ namespace NavisBridge
         private static JToken CreateAnimation(JObject a)
         {
             string name = (string)a["name"] ?? throw new ArgumentException("name is required");
-            if (FindViewpointByName(Doc.SavedViewpoints.Value, name) != null) throw new ArgumentException("A viewpoint or animation named '" + name + "' already exists. Use another name.");
+            RequireNewViewpointName(name);
             var d = Doc;
             var frames = new List<Viewpoint>();
             Viewpoint original = null; try { original = d.CurrentViewpoint.CreateCopy(); } catch { }

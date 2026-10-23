@@ -34,6 +34,15 @@ namespace NavisBridge
         // Work queued by the HTTP thread, drained on the Navisworks UI thread by a WinForms timer.
         private static readonly ConcurrentQueue<Action> _queue = new ConcurrentQueue<Action>();
         private static System.Windows.Forms.Timer _timer;
+        private static bool _running; // true while a request is being run on the UI thread
+
+        private static bool SameText(string a, string b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            int diff = 0;
+            for (int i = 0; i < a.Length; i++) diff |= a[i] ^ b[i];
+            return diff == 0;
+        }
 
         static BridgePlugin()
         {
@@ -95,9 +104,17 @@ namespace NavisBridge
             _timer = new System.Windows.Forms.Timer { Interval = 50 };
             _timer.Tick += (s, e) =>
             {
-                Action a;
-                int guard = 0;
-                while (guard++ < 20 && _queue.TryDequeue(out a)) { Log("tick dequeue"); a(); }
+                // Some tools wait for the view to settle (they let Windows handle events), and that can fire this timer again.
+                // Without this guard a second request would start in the middle of the first one and the two would mix.
+                if (_running) return;
+                _running = true;
+                try
+                {
+                    Action a;
+                    int guard = 0;
+                    while (guard++ < 20 && _queue.TryDequeue(out a)) { Log("tick dequeue"); a(); }
+                }
+                finally { _running = false; }
             };
             _timer.Start();
 
@@ -169,8 +186,10 @@ namespace NavisBridge
                 var ctype = ctx.Request.ContentType ?? "";
                 if (!ctype.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
                     throw new UnauthorizedAccessException("content type must be application/json");
-                if (string.IsNullOrEmpty(_token) || ctx.Request.Headers["X-Bridge-Token"] != _token)
+                if (string.IsNullOrEmpty(_token) || !SameText(ctx.Request.Headers["X-Bridge-Token"], _token))
                     throw new UnauthorizedAccessException("bad token");
+                if (ctx.Request.ContentLength64 > 4 * 1024 * 1024)
+                    throw new InvalidOperationException("request too large");
 
                 string body;
                 using (var r = new StreamReader(ctx.Request.InputStream, Encoding.UTF8)) body = r.ReadToEnd();
