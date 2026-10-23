@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.1
+- New: `add_animation_cuts` adds pauses (cuts) to an animation, so the camera can hold still. It reads the pauses back to confirm.
+- New: `set_animation_options` sets smoothing (None / Sync) and loop on an animation and reads the values back.
+- New: `delete_animations` deletes animations by exact name (dry run first).
+- `create_walkthrough` has `pauseInsideSeconds` to pause once inside each door.
+- `self_test` now checks the pause and smoothing calls and no longer says "viewpoint replace NO" by mistake.
+
 ## 1.7.0
 - New: `set_camera` puts the camera at an exact point and aims it, and returns where it ended up.
 - New: `create_walkthrough` builds an animation that walks through door openings at eye height (or along your own waypoints). Between stops the camera moves in a straight line.

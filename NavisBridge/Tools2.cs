@@ -683,7 +683,20 @@ namespace NavisBridge
             Check(r, "section box: GetClippingPlanes", () => { var s = GetClipJson(); return string.IsNullOrWhiteSpace(s) ? "no section is active (enable Sectioning > Box once)" : "section JSON length " + s.Length; });
             Check(r, "section box: TrySetClippingPlanes", () => { if (Doc.ActiveView.GetType().GetMethod("TrySetClippingPlanes") == null) throw new Exception("missing"); return "present"; });
             Check(r, "rename calls", () => (FindMethod(Doc.SavedViewpoints, "EditDisplayName", 2) != null ? "viewpoints yes" : "viewpoints NO") + ", " + (FindMethod(Doc.SelectionSets, "EditDisplayName", 2) != null ? "sets yes" : "sets NO"));
-            Check(r, "remove / replace calls", () => (FindMethod(Doc.SelectionSets, "Remove", 1) != null ? "set remove yes" : "set remove NO") + ", " + (FindMethod(Doc.SavedViewpoints, "Replace", 2) != null ? "viewpoint replace yes" : "viewpoint replace NO"));
+            Check(r, "remove / replace calls", () => (FindMethod(Doc.SelectionSets, "Remove", 1) != null ? "set remove yes" : "set remove NO") + ", " + (FindMethod(Doc.SavedViewpoints, "ReplaceWithCopy", 2) != null ? "viewpoint replace yes" : "viewpoint replace NO"));
+            Check(r, "animation options (smoothing, loop)", () =>
+            {
+                var t = typeof(SavedViewpointAnimation);
+                var s = t.GetProperty("Smoothing"); var l = t.GetProperty("Loops");
+                return "smoothing " + (s != null && s.CanWrite ? "writable (" + string.Join("/", s.PropertyType.IsEnum ? Enum.GetNames(s.PropertyType) : new[] { s.PropertyType.Name }) + ")" : "NO") + ", loop " + (l != null && l.CanWrite ? "writable" : "NO");
+            });
+            Check(r, "animation pauses (cuts)", () =>
+            {
+                var t = typeof(SavedViewpointAnimationCut);
+                var ct = t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).Where(c => c.GetParameters().Length == 0 || (c.GetParameters().Length == 1 && c.GetParameters()[0].ParameterType == typeof(string))).Count();
+                var d = t.GetProperty("Delay", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                return "usable constructors " + ct + ", Delay " + (d == null ? "missing" : d.CanWrite ? "writable" : "read only") + ", InsertCopy " + (FindMethod(Doc.SavedViewpoints, "InsertCopy", 3) != null ? "yes" : "NO");
+            });
             Check(r, "animation length property", () =>
             {
                 var t = typeof(SavedViewpointAnimation);

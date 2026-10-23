@@ -17,7 +17,7 @@ namespace NavisBridge
             {
                 case "set_camera": return SetCamera(a);
                 case "create_walkthrough": return CreateWalkthrough(a);
-                default: return null;
+                default: return RunExtra3(tool, a);
             }
         }
 
@@ -251,6 +251,19 @@ namespace NavisBridge
             if (ins == null) throw new InvalidOperationException("This Navisworks version has no InsertCopy call, so frames cannot be added to an animation from AI Connect.");
             for (int i = 0; i < frames.Count; i++)
                 ins.Invoke(coll, new object[] { live, i, new SavedViewpoint(frames[i]) { DisplayName = name + " " + (i + 1) } });
+            // optional pause (a "cut") at each place where the camera is inside a room, so the viewer can look around
+            double pauseInside = (double?)a["pauseInsideSeconds"] ?? 0;
+            if (pauseInside < 0 || pauseInside > 600) throw new ArgumentException("pauseInsideSeconds must be between 0 and 600.");
+            JObject pauseReport = null;
+            if (pauseInside > 0)
+            {
+                int offset = frames.Count == stops.Count + 1 ? 2 : 1; // frame number (1-based) of stop j is j + offset
+                var cuts = new List<KeyValuePair<int, double>>();
+                for (int j = 0; j < stops.Count; j++)
+                    if (stops[j].Label == "inside" && j + offset < frames.Count) cuts.Add(new KeyValuePair<int, double>(j + offset, pauseInside));
+                try { pauseReport = InsertCuts(name, cuts); }
+                catch (Exception e) { pauseReport = new JObject { ["cutsAdded"] = 0, ["error"] = Inner(e).Message }; }
+            }
             if (original != null) { try { d0.CurrentViewpoint.CopyFrom(original); } catch { } }
             int count = 0; try { foreach (SavedItem ch in FindAnim(name).Children) if (ch is SavedViewpoint) count++; } catch { }
             var first = frames.Count > 1 ? CameraReport(frames[1]) : null;
@@ -258,6 +271,7 @@ namespace NavisBridge
             {
                 ["created"] = name, ["units"] = d0.Units.ToString(),
                 ["framesRequested"] = frames.Count, ["framesInAnimation"] = count,
+                ["pauses"] = pauseReport,
                 ["doors"] = doorsReport, ["sectionBoxSwitchedOff"] = sectionOff,
                 ["firstWalkFrame"] = first,
                 ["note"] = "Between stops the camera moves in a straight line, so it can pass through walls where there is no door. Add waypoints for corridors and turns. The length of the animation is set by Navisworks (more frames = longer).",
