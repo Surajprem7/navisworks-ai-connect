@@ -136,7 +136,7 @@ namespace NavisBridge
             };
         }
 
-        private sealed class Stop { public double[] Pos; public double[] Dir; public string Label; }
+        private sealed class Stop { public double[] Pos; public double[] Dir; public string Label; public string Level; public string Room; }
 
         // Builds an animation that walks through door openings (or along waypoints you give).
         // Doors: for each door the camera starts in front of it, passes through the opening at eye height and ends inside, always looking the way it moves.
@@ -206,22 +206,32 @@ namespace NavisBridge
                     bool towardCentre = nx * (mcx - cx) + ny * (mcy - cy) >= 0;
                     bool flip = entry == "outward" ? towardCentre : !towardCentre;
                     if (flip) { nx = -nx; ny = -ny; }
-                    doors.Add(new Stop { Pos = new[] { cx, cy, lo[2] + eye }, Dir = new[] { nx, ny, 0.0 }, Label = it.DisplayName + " " + (PropValue(it, "Item", "GUID") ?? "") });
+                    doors.Add(new Stop { Pos = new[] { cx, cy, lo[2] + eye }, Dir = new[] { nx, ny, 0.0 }, Label = it.DisplayName + " " + (PropValue(it, "Item", "GUID") ?? ""), Level = PropValue(it, "Level", "Name") ?? PropValue(it, "Item", "Layer"), Room = PropValue(it, "Element", "From Room") });
                 }
                 if (doors.Count == 0) throw new ArgumentException("The doors found have no geometry to measure.");
 
-                // Doors are grouped by floor level (height of the sill). A straight walk from one floor to another would go through the slab,
-                // so by default only the floor with the most doors is walked ("level": "all" keeps every floor).
+                // Doors are grouped by floor. A straight walk from one floor to another would go through the slab, so only one floor is walked.
+                // The floor is the door's Level name (or its layer); if a door has neither, doors whose sill heights are close count as one floor.
+                // level: "largest" (default) = the floor with most doors, "all" = every floor, or part of a floor name (for example "GROUND").
                 double tol = Math.Max(0.3, (double?)a["levelToleranceM"] ?? 1.5) * upm;
-                string levelMode = ((string)a["level"] ?? "largest").ToLowerInvariant();
-                var groups = doors.GroupBy(d => (long)Math.Round((d.Pos[2] - eye) / tol)).OrderBy(g => g.Key).ToList();
+                string levelMode = ((string)a["level"] ?? "largest").Trim();
+                Func<Stop, string> floorOf = d => !string.IsNullOrWhiteSpace(d.Level) ? d.Level : "height " + (long)Math.Round((d.Pos[2] - eye) / tol);
+                var groups = doors.GroupBy(floorOf).OrderBy(g => g.Average(d => d.Pos[2])).ToList();
                 foreach (var g in groups)
-                    levelsReport.Add(new JObject { ["sillHeightM"] = R3(g.Average(d => d.Pos[2] - eye) / upm), ["doors"] = g.Count() });
-                if (levelMode != "all" && groups.Count > 1)
+                    levelsReport.Add(new JObject { ["floor"] = g.Key, ["sillHeightM"] = R3(g.Average(d => d.Pos[2] - eye) / upm), ["doors"] = g.Count() });
+                if (!string.Equals(levelMode, "all", StringComparison.OrdinalIgnoreCase) && groups.Count > 1)
                 {
-                    var keep = groups.OrderByDescending(g => g.Count()).ThenBy(g => g.Key).First();
-                    skippedOtherLevels = doors.Count - keep.Count();
-                    doors = keep.ToList();
+                    List<Stop> keepDoors;
+                    if (string.Equals(levelMode, "largest", StringComparison.OrdinalIgnoreCase) || levelMode.Length == 0)
+                        keepDoors = groups.OrderByDescending(g => g.Count()).First().ToList();
+                    else
+                    {
+                        var matched = groups.Where(g => g.Key.IndexOf(levelMode, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                        if (matched.Count == 0) throw new ArgumentException("No floor matches '" + levelMode + "'. Floors found: " + string.Join("; ", groups.Select(g => g.Key + " (" + g.Count() + " doors)")));
+                        keepDoors = matched.SelectMany(g => g).ToList();
+                    }
+                    skippedOtherLevels = doors.Count - keepDoors.Count;
+                    doors = keepDoors;
                 }
                 if (order == "nearest")
                 {
@@ -245,7 +255,7 @@ namespace NavisBridge
                     stops.Add(new Stop { Pos = new[] { d.Pos[0] - d.Dir[0] * appr, d.Pos[1] - d.Dir[1] * appr, d.Pos[2] }, Dir = d.Dir, Label = "before door" });
                     stops.Add(new Stop { Pos = new[] { d.Pos[0], d.Pos[1], d.Pos[2] }, Dir = d.Dir, Label = "in door" });
                     stops.Add(new Stop { Pos = new[] { d.Pos[0] + d.Dir[0] * inside, d.Pos[1] + d.Dir[1] * inside, d.Pos[2] }, Dir = d.Dir, Label = "inside" });
-                    doorsReport.Add(new JObject { ["door"] = d.Label, ["centre"] = new JArray(d.Pos.Select(R3)), ["wayIn"] = new JArray(R3(d.Dir[0]), R3(d.Dir[1])) });
+                    doorsReport.Add(new JObject { ["door"] = d.Label, ["floor"] = d.Level, ["fromRoom"] = d.Room, ["centre"] = new JArray(d.Pos.Select(R3)), ["wayIn"] = new JArray(R3(d.Dir[0]), R3(d.Dir[1])) });
                 }
             }
             if (stops.Count < 2) throw new ArgumentException("A walkthrough needs at least 2 stops.");

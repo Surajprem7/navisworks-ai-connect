@@ -6,7 +6,7 @@
 - New: `delete_animations` deletes animations by exact name (dry run first).
 - `create_walkthrough` has `pauseInsideSeconds` to pause once inside each door.
 - `self_test` now checks the pause and smoothing calls and no longer says "viewpoint replace NO" by mistake.
-- `create_walkthrough` walks one floor at a time (`level`, `levelToleranceM`): a straight line between floors would go through the slab. The reply lists the floors found.
+- `create_walkthrough` walks one floor at a time (`level`): a straight line between floors would go through the slab. The floor is the door's Level name (or its layer), or the sill height if there is none (`levelToleranceM`). The reply lists the floors found and the room each door opens from.
 - Audit fixes:
   - Saving a set, viewpoint or animation under a name that is already used is now refused with a clear message (before, it made a duplicate and `save_item_viewpoint` could check the wrong one).
   - An animation is listed as one item. `delete_viewpoints` (prefix) and `rename_saved_items` no longer touch the frames inside an animation.
