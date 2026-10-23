@@ -32,7 +32,7 @@ namespace NavisBridge
                 case "list_timeliner_tasks": return ListTimelinerTasks(a);
                 case "self_test": return SelfTest();
                 case "inspect_item_geometry": return InspectItemGeometry(a);
-                default: return null;
+                default: return RunExtra2(tool, a);
             }
         }
 

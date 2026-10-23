@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.0
+- New: `set_camera` puts the camera at an exact point and aims it, and returns where it ended up.
+- New: `create_walkthrough` builds an animation that walks through door openings at eye height (or along your own waypoints). Between stops the camera moves in a straight line.
+
 ## 1.6.4
 - Easier install: the installer installs Node.js LTS automatically if it is missing (winget, else a checked download from nodejs.org), checks .NET Framework 4.8, registers the connector in Claude Desktop for the normal user, and tells you what to do if something cannot be set up.
 - Section box now follows the equipment: it is turned to the item's own angle and sized to the item's real sides (`align` item/world, `rotationDeg`). `inspect_item_geometry` shows an item's rotation.

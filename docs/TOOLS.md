@@ -36,6 +36,8 @@ Property conditions use the names you see in Navisworks' **Find Items** / **Prop
 | `color_by_property` | `groupCategory`, `groupProperty`, source/search fields, `maxGroups?`, `transparency?` | Colours items by a property value and returns a legend (view only). |
 | `inspect_animation_api` | `name` | Diagnostic: what Navisworks exposes for one animation. |
 | `create_animation` | `name`, `viewpoints?` or `sets?`, `settleMs?` | Creates a viewpoint animation from 2+ saved viewpoints, or by zooming to 2+ saved sets. |
+| `set_camera` | `position`, `lookAt?` or `direction?`, `save?` | Puts the camera at an exact point (model units), vertical axis up, and returns where it ended up. Optionally saves the view. |
+| `create_walkthrough` | `name`, door search/set/selection or `waypoints?`, `entry?`, `order?`, `maxDoors?`, `eyeHeightM?`, `approachM?`, `insideM?`, `includeCurrentView?`, `keepSection?` | Animation that walks through door openings at eye height (or along your waypoints). Straight lines between stops. Switches the section box off unless `keepSection`. |
 | `set_animation_duration` | `name`, `seconds` | Sets the animation length if the version allows it. |
 | `list_timeliner_tasks` | `limit?`, `maxDepth?` | Reads the Timeliner task tree (read only, experimental). |
 | `self_test` | none | Health check inside Navisworks. |
